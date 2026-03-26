@@ -1,0 +1,21 @@
+[package]
+name = "offline-first-autonomy-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "offline_first_autonomy"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+pyo3-asyncio = { version = "0.21", features = ["tokio-runtime"] }
+tokio = { version = "1.38", features = ["full"] }
+common = { path = "../crates/common" }
+mesh-transport = { path = "../crates/mesh-transport" }
+state-sync = { path = "../crates/state-sync" }
+agent-core = { path = "../crates/agent-core" }
+
+[profile.release]
+opt-level = 3
+lto = true

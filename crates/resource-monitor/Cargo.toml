@@ -1,0 +1,24 @@
+[package]
+name = "resource-monitor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+common = { path = "../common" }
+
+# Platform‑specific dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+sysinfo = "0.30"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+sysinfo = "0.30"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+sysinfo = "0.30"
