@@ -1,13 +1,13 @@
 [package]
-name = "agent-core"
-version = "0.2.0"
+name = "distributed-planner"
+version = "0.1.0"
 edition = "2021"
-description = "Core agent logic for offline‑first multi‑agent systems (lifecycle, message routing, coordination)"
+description = "Distributed task planning for offline‑first multi‑agent systems"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
 
 [dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -16,4 +16,13 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 common = { path = "../common" }
 mesh-transport = { path = "../mesh-transport" }
+bounded-consensus = { path = "../bounded-consensus" }
 state-sync = { path = "../state-sync" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "planning_bench"
+harness = false

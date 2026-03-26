@@ -1,6 +1,6 @@
 # ROS2/Gazebo Simulation Example
 
-This directory contains an example of using the Offline‑First Multi‑Agent Autonomy SDK with ROS2 and Gazebo for robotics simulation.
+This directory contains examples of using the Offline‑First Multi‑Agent Autonomy SDK with ROS2 and Gazebo for robotics simulation.
 
 ## Overview
 
@@ -19,7 +19,7 @@ In a robotics context, each agent corresponds to a robot (real or simulated). Th
 - Python 3.8+
 - Rust (for building the SDK)
 
-## Example: Two Simulated Robots
+## Example 1: Simple Simulation (No ROS2)
 
 The script `simple_robot.py` demonstrates two simulated robots (Agent 1 and Agent 2) that:
 
@@ -28,7 +28,7 @@ The script `simple_robot.py` demonstrates two simulated robots (Agent 1 and Ag
 3. Use a local planner to decide which robot should recharge based on battery levels.
 4. Execute a simple “move to charging station” action (simulated).
 
-## Running the Example
+### Running the Example
 
 1. Build the SDK and Python bindings:
 
@@ -38,32 +38,94 @@ The script `simple_robot.py` demonstrates two simulated robots (Agent 1 and Ag
    pip install -e .
    ```
 
-2. Ensure you have a ROS2 workspace with a Gazebo simulation running (or use the provided dummy simulation).
-
-3. Run the example:
+2. Run the example:
 
    ```bash
    cd examples/ros2_gazebo
    python simple_robot.py
    ```
 
-## Integration with ROS2
+## Example 2: ROS2 Node Integration
 
-The SDK can be integrated into a ROS2 node using the Python bindings. Each robot runs a ROS2 node that subscribes to sensor topics, updates the agent’s CRDT map, and publishes commands based on the local planner’s decisions.
+The file `ros2_node_example.py` is a fully functional ROS2 node that integrates the SDK. It:
 
-A more complete example would include:
+- Subscribes to a simulated battery topic.
+- Publishes velocity commands.
+- Shares robot state (battery, position, charging status) with other agents via the SDK's CRDT map.
+- Makes decisions based on shared state (e.g., which robot should recharge).
 
-- A ROS2 package that wraps the SDK.
-- Launch files for multi‑robot simulation.
-- Custom message types for robot‑specific state (position, battery, sensor readings).
-- Gazebo plugins to simulate robot dynamics.
+### Running the ROS2 Node
+
+1. Ensure the SDK Python bindings are installed (as above).
+
+2. Make the script executable (optional):
+
+   ```bash
+   chmod +x examples/ros2_gazebo/ros2_node_example.py
+   ```
+
+3. Run the node with a specific agent ID:
+
+   ```bash
+   ros2 run offline_first_autonomy ros2_node_example --ros-args -p agent_id:=1
+   ```
+
+   (You may need to install the package first; see below.)
+
+### Launch File for Multi‑Robot Simulation
+
+A launch file `launch/multi_robot.launch.py` is provided to start two robot nodes simultaneously.
+
+```bash
+ros2 launch offline_first_autonomy multi_robot.launch.py
+```
+
+## Creating a ROS2 Package
+
+To integrate the SDK into your own ROS2 workspace, you can create a package:
+
+1. Create a new ROS2 package (if you haven't already):
+
+   ```bash
+   ros2 pkg create --build-type ament_python offline_first_autonomy
+   ```
+
+2. Copy the example node and launch files into the package.
+
+3. Add dependencies to `package.xml`:
+
+   ```xml
+   <exec_depend>rclpy</exec_depend>
+   <exec_depend>std_msgs</exec_depend>
+   <exec_depend>geometry_msgs</exec_depend>
+   ```
+
+4. Update `setup.py` to include the script and launch files.
+
+5. Build and install the package:
+
+   ```bash
+   colcon build --packages-select offline_first_autonomy
+   source install/setup.bash
+   ```
+
+## Integration with Gazebo
+
+For a complete simulation, you can connect the ROS2 nodes to a Gazebo world:
+
+- Use Gazebo plugins to simulate robot dynamics.
+- Publish sensor data (battery, position) to the topics the node subscribes to.
+- Subscribe to the `cmd_vel` topic published by the node to move the robot.
+
+A sample Gazebo world and robot model are not included in this example but can be added in future extensions.
 
 ## Next Steps
 
-- Implement a real ROS2 node that uses the SDK.
+- Implement a real ROS2 node that uses the SDK with actual sensor data.
 - Create a Gazebo world with multiple robots.
 - Extend the local planner with more sophisticated task allocation algorithms.
 - Add fault‑tolerance mechanisms (e.g., leader election, consensus).
+- Use the SDK's bounded consensus for coordinated decision‑making.
 
 ## License
 

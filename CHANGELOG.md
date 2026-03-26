@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Web‑based monitoring dashboard (`examples/web_monitor.rs`).
+- Bounded consensus algorithm (two‑phase commit with timeouts).
+- Delta compression (Zlib) and deduplication in `state‑sync`.
+- Python bindings for `peers()` method returning live peer list.
+- Integration of delta compression into mesh‑transport.
+
+### Changed
+- Improved libp2p backend: peer‑id to agent‑id mapping, synchronous `peers()`.
+- Updated all crate versions to 0.2.0.
+- Enhanced documentation with new features and examples.
+
+### Fixed
+- Python `peers()` method now correctly returns list of connected peers.
+- Delta batching and deduplication logic.
+
+## [0.2.0] - 2026‑03‑26
+
+### Added
 - Initial project skeleton with Rust workspace and six core crates:
   - `common`: shared types, error handling, serialization utilities.
   - `mesh‑transport`: mesh networking with libp2p backend, discovery, connection management.

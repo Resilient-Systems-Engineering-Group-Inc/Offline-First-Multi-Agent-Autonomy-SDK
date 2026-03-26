@@ -14,10 +14,13 @@ Enable groups of agents (robots, drones, edge devices) to collaborate reliably w
 
 - **Offline‑First Design**: Agents operate fully locally and synchronize state opportunistically.
 - **Conflict‑Free Replicated Data Types (CRDTs)**: Automatically merge divergent state without conflicts.
-- **Mesh Networking**: Peer‑to‑peer discovery and communication using libp2p (mDNS, TCP, WebSocket).
+- **Mesh Networking**: Peer‑to‑peer discovery and communication using libp2p (mDNS, TCP, WebSocket) with improved peer mapping and in‑memory backend for simulation.
 - **Modular Architecture**: Pluggable components for local planning, resource monitoring, and transport.
-- **Python Bindings**: Use the SDK from Python for rapid prototyping and integration with ROS2/Gazebo.
+- **Python Bindings**: Use the SDK from Python for rapid prototyping and integration with ROS2/Gazebo, with async support and peer listing.
 - **Benchmarking & Testing**: Comprehensive test suites and performance benchmarks.
+- **Bounded Consensus**: Two‑phase commit protocol for agreement within bounded rounds.
+- **Delta Compression & Batching**: Optimized CRDT delta serialization with compression (Zlib) and deduplication.
+- **Web Monitor**: Built‑in web interface for real‑time agent monitoring.
 
 ## 🏗️ Architecture
 
@@ -34,12 +37,13 @@ The SDK is organized as a Rust workspace with the following crates:
 | Crate | Description |
 |-------|-------------|
 | `common` | Shared types, error handling, utilities (CBOR serialization). |
-| `mesh‑transport` | Mesh networking with libp2p backend, discovery, connection management. |
-| `state‑sync` | CRDT‑based map, delta‑based synchronization, vector clocks. |
+| `mesh‑transport` | Mesh networking with libp2p backend, discovery, connection management, in‑memory simulation. |
+| `state‑sync` | CRDT‑based map, delta‑based synchronization, vector clocks, compression, batching, deduplication. |
 | `agent‑core` | High‑level agent abstraction integrating transport and state sync. |
 | `local‑planner` | Trait and implementations for autonomous decision‑making. |
 | `resource‑monitor` | System resource tracking (CPU, memory, battery, network). |
-| `python/` | PyO3 bindings for Python integration. |
+| `bounded‑consensus` | Bounded‑round consensus protocol (two‑phase commit) for agreement. |
+| `python/` | PyO3 bindings for Python integration with async support. |
 
 ## 🚀 Getting Started
 
@@ -65,12 +69,54 @@ cargo build --release
 cargo run --example simple_sync
 ```
 
+**Extended multi‑agent demo** (three agents with in‑memory transport and simulated network):
+
+```bash
+cargo run --example multi_agent_demo
+```
+
+**Web monitor demo** (real‑time web interface for monitoring agents):
+
+```bash
+cargo run --example web_monitor
+```
+Then open http://127.0.0.1:3030 in your browser.
+
 **ROS2/Gazebo simulation example** (dummy simulation):
 
 ```bash
 cd examples/ros2_gazebo
 python simple_robot.py
 ```
+
+### In‑Memory Backend for Testing
+
+The SDK includes an in‑memory transport backend that simulates network communication within a single process, ideal for unit tests and simulations. Enable it by setting `use_in_memory: true` in `MeshTransportConfig`.
+
+Example:
+
+```rust
+let config = MeshTransportConfig {
+    local_agent_id: AgentId(1),
+    use_in_memory: true,
+    ..Default::default()
+};
+```
+
+### Integration Tests
+
+Run the integration tests for mesh‑transport and state‑sync:
+
+```bash
+cargo test -p mesh-transport --test integration
+cargo test -p state-sync --test integration
+```
+
+### Bounded Consensus Component
+
+A new crate `bounded-consensus` provides a protocol for reaching agreement within a bounded number of communication rounds. It is currently a placeholder for future implementation.
+
+To use it, add `bounded-consensus` as a dependency and implement the `BoundedConsensus` trait.
 
 ### Using the Python Bindings
 

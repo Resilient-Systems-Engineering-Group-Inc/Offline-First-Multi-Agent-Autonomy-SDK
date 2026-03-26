@@ -1,7 +1,10 @@
 [package]
 name = "mesh-transport"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Mesh transport layer for offline‑first multi‑agent systems (libp2p & in‑memory backends)"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
 
 [dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
@@ -13,6 +16,11 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 common = { path = "../common" }
+# Security
+ed25519-dalek = { version = "2.0", features = ["serde", "rand_core"] }
+rand_core = "0.6"
+serde_bytes = "0.11"
+bincode = "1.3"
 
 # Networking
 libp2p = { version = "0.54", default-features = false, features = [
@@ -26,3 +34,10 @@ libp2p = { version = "0.54", default-features = false, features = [
     "ping",
     "request-response",
 ] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "transport_bench"
+harness = false

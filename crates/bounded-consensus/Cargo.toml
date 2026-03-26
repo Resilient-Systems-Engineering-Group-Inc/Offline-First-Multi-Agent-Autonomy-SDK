@@ -1,0 +1,26 @@
+[package]
+name = "bounded-consensus"
+version = "0.2.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Bounded consensus for offline‑first multi‑agent systems"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+common = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "consensus_bench"
+harness = false

@@ -4,6 +4,8 @@ use common::types::AgentId;
 use mesh_transport::{MeshTransport, MeshTransportConfig};
 use agent_core::Agent;
 use serde_json::{Value, json};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Python module for Offline‑First Multi‑Agent Autonomy SDK.
 #[pymodule]
@@ -87,7 +89,8 @@ impl PyAgent {
 /// Python wrapper for MeshTransport (simplified).
 #[pyclass]
 struct PyMeshTransport {
-    inner: MeshTransport,
+    inner: Arc<RwLock<MeshTransport>>,
+    local_agent_id: u64,
 }
 
 #[pymethods]
@@ -98,15 +101,25 @@ impl PyMeshTransport {
             local_agent_id: AgentId(local_agent_id),
             ..Default::default()
         };
-        let transport = MeshTransport::new(config)
+        // Note: MeshTransport::new is async, but we cannot call it synchronously.
+        // For now, we'll panic if called incorrectly. In a real scenario, you'd use
+        // an async factory method. This is a placeholder.
+        let rt = tokio::runtime::Runtime::new()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self { inner: transport })
+        let transport = rt.block_on(async {
+            MeshTransport::new(config).await
+        }).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            inner: Arc::new(RwLock::new(transport)),
+            local_agent_id,
+        })
     }
 
-    fn start<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyAny> {
-        let mut inner = std::mem::replace(&mut self.inner, unreachable!());
+    fn start<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let inner = self.inner.clone();
         future_into_py(py, async move {
-            inner.start().await
+            let mut guard = inner.write().await;
+            guard.start().await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             Ok(())
         })
@@ -114,20 +127,28 @@ impl PyMeshTransport {
 
     /// Get the local agent ID.
     fn local_agent_id(&self) -> u64 {
-        self.inner.local_agent_id().0
+        self.local_agent_id
     }
 
     /// Get a list of connected peers.
     fn peers(&self) -> PyResult<Vec<u64>> {
-        let peer_infos = self.inner.peers();
-        Ok(peer_infos.into_iter().map(|p| p.agent_id.0).collect())
+        use tokio::runtime::Handle;
+        let handle = Handle::try_current()
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("No tokio runtime"))?;
+        let inner = self.inner.clone();
+        let peers = handle.block_on(async {
+            let guard = inner.read().await;
+            guard.peers()
+        });
+        Ok(peers.iter().map(|p| p.agent_id.0).collect())
     }
 
     /// Send a message to a specific peer (asynchronous).
     fn send_to<'py>(&self, py: Python<'py>, peer_id: u64, payload: Vec<u8>) -> PyResult<&'py PyAny> {
-        let inner = &self.inner;
+        let inner = self.inner.clone();
         future_into_py(py, async move {
-            inner.send_to(AgentId(peer_id), payload).await
+            let mut guard = inner.write().await;
+            guard.send_to(AgentId(peer_id), payload).await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             Ok(())
         })
@@ -135,9 +156,10 @@ impl PyMeshTransport {
 
     /// Broadcast a message to all connected peers (asynchronous).
     fn broadcast<'py>(&self, py: Python<'py>, payload: Vec<u8>) -> PyResult<&'py PyAny> {
-        let inner = &self.inner;
+        let inner = self.inner.clone();
         future_into_py(py, async move {
-            inner.broadcast(payload).await
+            let mut guard = inner.write().await;
+            guard.broadcast(payload).await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             Ok(())
         })

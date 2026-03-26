@@ -1,7 +1,10 @@
 [package]
 name = "local-planner"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Local planning and decision‑making for autonomous agents in offline‑first environments"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
 
 [dependencies]
 tokio = { workspace = true }

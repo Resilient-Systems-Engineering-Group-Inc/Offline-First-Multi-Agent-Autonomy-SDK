@@ -2,8 +2,10 @@
 
 use crate::backend::Backend;
 use crate::libp2p_backend::Libp2pBackend;
+use crate::in_memory_backend::InMemoryBackend;
 use common::types::{AgentId, PeerInfo};
 use common::error::Result;
+use common::metrics;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use tokio::sync::mpsc;
@@ -19,6 +21,8 @@ pub struct MeshTransportConfig {
     pub use_mdns: bool,
     /// Listening address.
     pub listen_addr: String,
+    /// If true, use an in‑memory backend (for testing/simulation).
+    pub use_in_memory: bool,
 }
 
 impl Default for MeshTransportConfig {
@@ -28,6 +32,7 @@ impl Default for MeshTransportConfig {
             static_peers: Vec::new(),
             use_mdns: true,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
+            use_in_memory: false,
         }
     }
 }
@@ -44,14 +49,19 @@ impl MeshTransport {
     pub async fn new(config: MeshTransportConfig) -> Result<Self> {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
 
-        // For now, we always use libp2p backend.
-        let mut backend = Libp2pBackend::new(config.local_agent_id).await
-            .map_err(|e| common::error::SdkError::Network(e.to_string()))?;
+        let mut backend: Box<dyn Backend> = if config.use_in_memory {
+            let backend = InMemoryBackend::new(config.clone()).await?;
+            Box::new(backend)
+        } else {
+            let backend = Libp2pBackend::new(config).await
+                .map_err(|e| common::error::SdkError::Network(e.to_string()))?;
+            Box::new(backend)
+        };
         // Start the backend (listening etc.)
         backend.start().await?;
 
         Ok(Self {
-            backend: Box::new(backend),
+            backend,
             event_tx,
             event_rx,
         })
@@ -69,11 +79,13 @@ impl MeshTransport {
 
     /// Broadcast a message to all connected peers.
     pub async fn broadcast(&mut self, payload: Vec<u8>) -> Result<()> {
+        metrics::inc_messages_sent();
         self.backend.broadcast(payload).await
     }
 
     /// Send a message to a specific peer.
     pub async fn send_to(&mut self, peer_id: AgentId, payload: Vec<u8>) -> Result<()> {
+        metrics::inc_messages_sent();
         self.backend.send_to(peer_id, payload).await
     }
 

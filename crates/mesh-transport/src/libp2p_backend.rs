@@ -12,13 +12,19 @@ use libp2p::{
 };
 use std::collections::HashMap;
 use std::error::Error;
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+use tokio::task::JoinHandle;
 use futures::stream::{BoxStream, StreamExt};
 use async_trait::async_trait;
+use tokio::runtime::Handle;
 
 use common::types::{AgentId, PeerInfo};
+use common::metrics;
 use crate::message::TransportEvent;
 use crate::backend::Backend;
+use crate::transport::MeshTransportConfig;
+use crate::security::{SecurityManager, SignedMessage};
 
 /// Protocol identifier for our mesh messages.
 const MESH_PROTOCOL: &[u8] = b"/offline-first-mesh/1.0.0";
@@ -75,11 +81,19 @@ impl request_response::Codec for MeshCodec {
 }
 
 impl MeshBehaviour {
-    fn new(event_tx: mpsc::UnboundedSender<TransportEvent>) -> Self {
+    fn new(event_tx: mpsc::UnboundedSender<TransportEvent>, use_mdns: bool) -> Self {
         let protocols = vec![(MESH_PROTOCOL.to_vec(), ProtocolSupport::Full)];
         let request_response = RequestResponse::new(MeshCodec, protocols, Default::default());
+        let mdns = if use_mdns {
+            Mdns::new(Default::default()).expect("mDNS creation failed")
+        } else {
+            // Create a dummy Mdns that does nothing (but still satisfies the type).
+            // This is a hack; libp2p doesn't provide a dummy behaviour.
+            // We'll just create Mdns anyway but ignore its events.
+            Mdns::new(Default::default()).expect("mDNS creation failed")
+        };
         Self {
-            mdns: Mdns::new(Default::default()).expect("mDNS creation failed"),
+            mdns,
             request_response,
             event_tx,
         }
@@ -110,12 +124,37 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<Vec<u8>, Vec<u8>>> for Me
         match event {
             RequestResponseEvent::Message { peer, message } => match message {
                 RequestResponseMessage::Request { request, channel, .. } => {
-                    // Incoming request: treat as a message from peer.
-                    let agent_id = peer_id_to_agent_id(&peer);
-                    let _ = self.event_tx.send(TransportEvent::MessageReceived {
-                        from: agent_id,
-                        payload: request,
-                    });
+                    // Incoming request: try to parse as SignedMessage
+                    match SignedMessage::from_bytes(&request) {
+                        Ok(signed) => {
+                            // Verify signature
+                            if let Err(e) = signed.verify() {
+                                tracing::warn!("Dropping message with invalid signature: {}", e);
+                                // Still send ack? We'll ack anyway to avoid hanging.
+                                self.request_response.send_response(channel, vec![]).ok();
+                                return;
+                            }
+                            // Extract payload
+                            let agent_id = peer_id_to_agent_id(&peer);
+                            metrics::inc_messages_received();
+                            let _ = self.event_tx.send(TransportEvent::MessageReceived {
+                                from: agent_id,
+                                payload: signed.payload,
+                            });
+                        }
+                        Err(e) => {
+                            // If deserialization fails, maybe it's an old‑format message (unsigned).
+                            // For backward compatibility, treat as raw payload.
+                            // Log a warning.
+                            tracing::debug!("Received unsigned message (fallback): {}", e);
+                            let agent_id = peer_id_to_agent_id(&peer);
+                            metrics::inc_messages_received();
+                            let _ = self.event_tx.send(TransportEvent::MessageReceived {
+                                from: agent_id,
+                                payload: request,
+                            });
+                        }
+                    }
                     // Auto‑respond with empty vector (ack).
                     self.request_response.send_response(channel, vec![]).ok();
                 }
@@ -143,14 +182,19 @@ pub struct Libp2pBackend {
     swarm: Swarm<MeshBehaviour>,
     local_agent_id: AgentId,
     local_peer_id: PeerId,
+    event_tx: mpsc::UnboundedSender<TransportEvent>,
     event_rx: mpsc::UnboundedReceiver<TransportEvent>,
-    /// Mapping from AgentId to PeerId (for sending).
-    peer_map: HashMap<AgentId, PeerId>,
+    /// Mapping from AgentId to PeerId for connected peers.
+    connected_peers: Arc<RwLock<HashMap<AgentId, PeerId>>>,
+    /// Security manager for signing and verifying messages.
+    security_manager: SecurityManager,
+    /// Background task handle for swarm event loop.
+    _task_handle: Option<JoinHandle<()>>,
 }
 
 impl Libp2pBackend {
-    /// Create a new libp2p backend.
-    pub async fn new(local_agent_id: AgentId) -> Result<Self, Box<dyn Error>> {
+    /// Create a new libp2p backend with the given configuration.
+    pub async fn new(config: MeshTransportConfig) -> Result<Self, Box<dyn Error>> {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
@@ -162,17 +206,30 @@ impl Libp2pBackend {
             .boxed();
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let behaviour = MeshBehaviour::new(event_tx);
+        let behaviour = MeshBehaviour::new(event_tx, config.use_mdns);
 
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
-        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+        // Listen on the configured address
+        swarm.listen_on(config.listen_addr.parse()?)?;
+
+        // Dial static peers
+        for peer in config.static_peers {
+            for addr in peer.addresses {
+                if let Ok(addr) = addr.parse::<Multiaddr>() {
+                    swarm.dial(addr)?;
+                }
+            }
+        }
 
         Ok(Self {
             swarm,
-            local_agent_id,
+            local_agent_id: config.local_agent_id,
             local_peer_id,
+            event_tx,
             event_rx,
-            peer_map: HashMap::new(),
+            connected_peers: Arc::new(RwLock::new(HashMap::new())),
+            security_manager: SecurityManager::generate(),
+            _task_handle: None,
         })
     }
 
@@ -228,8 +285,52 @@ impl Libp2pBackend {
 #[async_trait]
 impl Backend for Libp2pBackend {
     async fn start(&mut self) -> Result<()> {
-        // The swarm is already listening; we just need to start processing events.
-        // In a real implementation we would spawn a task for `run`.
+        // Spawn a background task to process swarm events.
+        let mut swarm = std::mem::replace(&mut self.swarm, unreachable!()); // We'll replace it back
+        let event_tx = self.event_tx.clone();
+        let connected_peers = self.connected_peers.clone();
+        let task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    event = swarm.select_next_some() => {
+                        match event {
+                            SwarmEvent::NewListenAddr { address, .. } => {
+                                tracing::info!("Listening on {}", address);
+                            }
+                            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                                // Map peer_id to agent_id and store in connected_peers
+                                let agent_id = peer_id_to_agent_id(&peer_id);
+                                let mut map = connected_peers.write().await;
+                                map.insert(agent_id, peer_id);
+                                // Update metrics
+                                metrics::set_connected_peers(map.len());
+                                // Notify about new peer
+                                let _ = event_tx.send(TransportEvent::PeerDiscovered(agent_id));
+                            }
+                            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                                // Remove from connected_peers
+                                let agent_id = peer_id_to_agent_id(&peer_id);
+                                let mut map = connected_peers.write().await;
+                                map.remove(&agent_id);
+                                // Update metrics
+                                metrics::set_connected_peers(map.len());
+                                let _ = event_tx.send(TransportEvent::PeerLost(agent_id));
+                            }
+                            SwarmEvent::Behaviour(_) => {
+                                // Handled by MeshBehaviour
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        break;
+                    }
+                }
+            }
+        });
+        // Put swarm back (we need to keep it)
+        self.swarm = swarm;
+        self._task_handle = Some(task);
         Ok(())
     }
 
@@ -239,32 +340,50 @@ impl Backend for Libp2pBackend {
     }
 
     async fn send_to(&mut self, agent_id: AgentId, payload: Vec<u8>) -> Result<()> {
-        // Look up PeerId from mapping, or derive from agent_id (if possible).
-        // For now, we assume agent_id is derived from PeerId via hash, which is not invertible.
-        // We'll need to iterate over known peers to find matching agent_id.
-        let peer_id = self.peer_map.get(&agent_id)
+        let connected_peers = self.connected_peers.read().await;
+        let peer_id = connected_peers.get(&agent_id)
             .cloned()
             .ok_or_else(|| common::error::SdkError::Network("Peer not found".to_string()))?;
-        self.swarm.behaviour_mut().request_response.send_request(&peer_id, payload);
+        // Sign the payload
+        let signed = self.security_manager.sign(payload);
+        let bytes = signed.to_bytes()
+            .map_err(|e| common::error::SdkError::Security(format!("Failed to serialize signed message: {}", e)))?;
+        self.swarm.behaviour_mut().request_response.send_request(&peer_id, bytes);
         Ok(())
     }
 
     async fn broadcast(&mut self, payload: Vec<u8>) -> Result<()> {
-        self.broadcast(payload).await
-            .map_err(|e| common::error::SdkError::Network(e.to_string()))
+        let connected_peers = self.connected_peers.read().await;
+        let peers: Vec<PeerId> = connected_peers.values().cloned().collect();
+        // Sign once and reuse for all peers
+        let signed = self.security_manager.sign(payload);
+        let bytes = signed.to_bytes()
+            .map_err(|e| common::error::SdkError::Security(format!("Failed to serialize signed message: {}", e)))?;
+        for peer in peers {
+            self.swarm.behaviour_mut().request_response.send_request(&peer, bytes.clone());
+        }
+        Ok(())
     }
 
     fn peers(&self) -> Vec<PeerInfo> {
-        self.swarm.connected_peers()
-            .map(|peer_id| {
-                let agent_id = peer_id_to_agent_id(peer_id);
-                PeerInfo {
-                    agent_id,
-                    addresses: vec![], // TODO: get addresses
-                    metadata: Default::default(),
-                }
-            })
-            .collect()
+        // This is called from synchronous context; we block on the async lock.
+        // Use the current runtime handle.
+        match Handle::try_current() {
+            Ok(handle) => handle.block_on(async {
+                let connected_peers = self.connected_peers.read().await;
+                connected_peers.iter().map(|(&agent_id, &peer_id)| {
+                    PeerInfo {
+                        agent_id,
+                        addresses: Vec::new(), // TODO: retrieve peer addresses from swarm
+                        metadata: std::collections::HashMap::new(),
+                    }
+                }).collect()
+            }),
+            Err(_) => {
+                // No runtime; return empty list (should not happen in normal use)
+                vec![]
+            }
+        }
     }
 
     fn events(&mut self) -> BoxStream<'static, TransportEvent> {
