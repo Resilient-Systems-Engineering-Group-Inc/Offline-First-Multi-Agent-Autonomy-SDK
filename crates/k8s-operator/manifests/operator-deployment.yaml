@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: autonomy-operator
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: autonomy-operator
+  namespace: default
+rules:
+  - apiGroups: ["autonomy.sdk"]
+    resources: ["agents", "tasks"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["autonomy.sdk"]
+    resources: ["agents/status", "tasks/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autonomy-operator
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: autonomy-operator
+subjects:
+  - kind: ServiceAccount
+    name: autonomy-operator
+    namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autonomy-operator
+  namespace: default
+  labels:
+    app: autonomy-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autonomy-operator
+  template:
+    metadata:
+      labels:
+        app: autonomy-operator
+    spec:
+      serviceAccountName: autonomy-operator
+      containers:
+        - name: operator
+          image: autonomy/operator:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

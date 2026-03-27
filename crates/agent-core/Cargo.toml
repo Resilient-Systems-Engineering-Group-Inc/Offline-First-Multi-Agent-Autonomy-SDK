@@ -17,3 +17,8 @@ futures = { workspace = true }
 common = { path = "../common" }
 mesh-transport = { path = "../mesh-transport" }
 state-sync = { path = "../state-sync" }
+iot-interface = { path = "../iot-interface", optional = true }
+
+[features]
+default = []
+iot = ["iot-interface"]

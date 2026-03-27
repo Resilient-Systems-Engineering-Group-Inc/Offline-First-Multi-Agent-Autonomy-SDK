@@ -7,6 +7,16 @@ use std::net::SocketAddr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentId(pub u64);
 
+/// Identity of an agent, combining its ID with a public key for authentication.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentIdentity {
+    pub id: AgentId,
+    /// Ed25519 public key (32 bytes).
+    pub public_key: [u8; 32],
+    /// Optional certificate (e.g., X.509) for higher‑level authentication.
+    pub certificate: Option<Vec<u8>>,
+}
+
 /// Peer information including its network address.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {

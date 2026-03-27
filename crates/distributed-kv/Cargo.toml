@@ -1,0 +1,29 @@
+[package]
+name = "distributed-kv"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name"]
+description = "Distributed key‑value store based on CRDTs for offline‑first multi‑agent systems"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1"
+thiserror = "1.0"
+tracing = "0.1"
+crdts = "7.0"
+state-sync = { path = "../state-sync" }
+mesh-transport = { path = "../mesh-transport" }
+common = { path = "../common" }
+sled = "0.34"  # optional persistence
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio = { version = "1.0", features = ["full"] }
+
+[features]
+default = ["persistence"]
+persistence = ["sled"]

@@ -275,6 +275,75 @@ impl EncryptedMessage {
     }
 }
 
+// --- Authentication ---
+
+use common::types::AgentIdentity;
+
+/// Authenticator verifies that a message is signed by a specific agent identity.
+pub struct Authenticator;
+
+impl Authenticator {
+    /// Verify that a signed message is valid and matches the given agent identity.
+    pub fn verify_signed_message(
+        signed: &SignedMessage,
+        identity: &AgentIdentity,
+    ) -> Result<(), SecurityError> {
+        // Check that the public key in the signed message matches the identity's public key.
+        if signed.public_key != identity.public_key {
+            return Err(SecurityError::InvalidSignature);
+        }
+        signed.verify()
+    }
+
+    /// Create a signed message that can be authenticated back to an identity.
+    pub fn sign_message(
+        payload: Vec<u8>,
+        key_pair: &KeyPair,
+        identity: &AgentIdentity,
+    ) -> Result<SignedMessage, SecurityError> {
+        // Ensure the key pair matches the identity (optional check)
+        if key_pair.verifying_key().to_bytes() != identity.public_key {
+            return Err(SecurityError::InvalidSignature);
+        }
+        Ok(SignedMessage::new(payload, key_pair))
+    }
+}
+
+/// Access control list (ACL) entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessControlEntry {
+    /// Agent ID allowed.
+    pub agent_id: AgentId,
+    /// Permissions: "read", "write", "admin", etc.
+    pub permissions: Vec<String>,
+    /// Resource pattern (e.g., "crdt/*").
+    pub resource: String,
+}
+
+/// Simple ACL manager.
+pub struct AccessControlList {
+    entries: Vec<AccessControlEntry>,
+}
+
+impl AccessControlList {
+    pub fn new() -> Self {
+        Self { entries: Vec::new() }
+    }
+
+    pub fn add_entry(&mut self, entry: AccessControlEntry) {
+        self.entries.push(entry);
+    }
+
+    /// Check if an agent has permission for a given resource and action.
+    pub fn check_permission(&self, agent_id: AgentId, resource: &str, action: &str) -> bool {
+        self.entries.iter().any(|entry| {
+            entry.agent_id == agent_id
+                && (entry.resource == resource || entry.resource.ends_with("*"))
+                && entry.permissions.contains(&action.to_string())
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

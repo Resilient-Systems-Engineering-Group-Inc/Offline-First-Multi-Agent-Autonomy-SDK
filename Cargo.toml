@@ -10,6 +10,11 @@ members = [
     "crates/distributed-planner",
     "crates/swarm-simulator",
     "crates/ros2-adapter",
+    "crates/distributed-kv",
+    "crates/iot-interface",
+    "crates/rl-planner",
+    "crates/blockchain-consensus",
+    "crates/k8s-operator",
 ]
 resolver = "2"
 

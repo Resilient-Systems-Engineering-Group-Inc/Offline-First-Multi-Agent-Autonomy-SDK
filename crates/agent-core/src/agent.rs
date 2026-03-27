@@ -9,12 +9,17 @@ use state_sync::{DefaultStateSync, StateSync};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+#[cfg(feature = "iot")]
+use iot_interface::{DeviceRegistry, SensorConfig, ActuatorConfig};
+
 /// A full‑fledged agent combining transport, state sync, and application logic.
 pub struct Agent {
     id: AgentId,
     integration: IntegrationAdapter,
     task_handle: Option<JoinHandle<Result<()>>>,
     fault_handle: Option<JoinHandle<()>>,
+    #[cfg(feature = "iot")]
+    device_registry: DeviceRegistry,
 }
 
 impl Agent {
@@ -38,6 +43,8 @@ impl Agent {
             integration,
             task_handle: None,
             fault_handle: Some(fault_handle),
+            #[cfg(feature = "iot")]
+            device_registry: DeviceRegistry::new(),
         })
     }
 
@@ -82,5 +89,36 @@ impl Agent {
     /// Broadcast local changes.
     pub async fn broadcast_changes(&mut self) -> Result<()> {
         self.integration.broadcast_changes().await
+    }
+
+    /// IoT‑related methods (available only with the `iot` feature).
+    #[cfg(feature = "iot")]
+    pub async fn add_sensor(&self, config: SensorConfig, protocol: &str) -> Result<()> {
+        self.device_registry.add_sensor(config, protocol).await
+    }
+
+    #[cfg(feature = "iot")]
+    pub async fn add_actuator(&self, config: ActuatorConfig, protocol: &str) -> Result<()> {
+        self.device_registry.add_actuator(config, protocol).await
+    }
+
+    #[cfg(feature = "iot")]
+    pub async fn get_sensor(&self, id: &str) -> Option<std::sync::Arc<dyn iot_interface::Sensor>> {
+        self.device_registry.get_sensor(id).await
+    }
+
+    #[cfg(feature = "iot")]
+    pub async fn get_actuator(&self, id: &str) -> Option<std::sync::Arc<dyn iot_interface::Actuator>> {
+        self.device_registry.get_actuator(id).await
+    }
+
+    #[cfg(feature = "iot")]
+    pub async fn list_sensors(&self) -> Vec<String> {
+        self.device_registry.list_sensors().await
+    }
+
+    #[cfg(feature = "iot")]
+    pub async fn list_actuators(&self) -> Vec<String> {
+        self.device_registry.list_actuators().await
     }
 }
