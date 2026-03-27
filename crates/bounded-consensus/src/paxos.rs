@@ -252,6 +252,31 @@ impl<T> PaxosConsensus<T> {
         )?;
         Ok(())
     }
+
+    /// Update the set of participants dynamically.
+    /// If a proposal is active, it will be aborted.
+    fn update_participants(&mut self, new_participants: HashSet<AgentId>) -> Result<()>
+    where
+        T: Clone + Serialize + for<'de> Deserialize<'de>,
+    {
+        info!(
+            "Paxos: updating participants from {:?} to {:?}",
+            self.config.participants, new_participants
+        );
+        // Abort any ongoing proposal
+        if self.current_proposal.is_some() {
+            info!("Paxos: aborting active proposal due to membership change");
+            if let Some(tx) = self.outcome_tx.take() {
+                let _ = tx.send(ConsensusOutcome::Aborted);
+            }
+            self.current_proposal = None;
+            self.promises.clear();
+            self.accepts.clear();
+        }
+        // Update configuration
+        self.config.update_participants(new_participants);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -321,5 +346,9 @@ where
 
     fn config(&self) -> &BoundedConsensusConfig {
         &self.config
+    }
+
+    async fn update_participants(&mut self, new_participants: HashSet<AgentId>) -> Result<()> {
+        self.update_participants(new_participants)
     }
 }

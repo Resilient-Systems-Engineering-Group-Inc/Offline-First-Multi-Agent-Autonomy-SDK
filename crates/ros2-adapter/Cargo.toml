@@ -1,0 +1,24 @@
+[package]
+name = "ros2-adapter"
+version = "0.1.0"
+edition = "2021"
+description = "ROS2 adapter for offline‑first multi‑agent autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+rclrs = { version = "0.10", features = ["rosidl_default_runtime"] }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+
+common = { path = "../common" }
+agent-core = { path = "../agent-core" }
+mesh-transport = { path = "../mesh-transport" }
+state-sync = { path = "../state-sync" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }

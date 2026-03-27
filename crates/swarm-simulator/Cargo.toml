@@ -1,0 +1,28 @@
+[package]
+name = "swarm-simulator"
+version = "0.1.0"
+edition = "2021"
+description = "Swarm simulator for testing offline‑first multi‑agent systems"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+rand = "0.8"
+common = { path = "../common" }
+mesh-transport = { path = "../mesh-transport" }
+agent-core = { path = "../agent-core" }
+distributed-planner = { path = "../distributed-planner" }
+bounded-consensus = { path = "../bounded-consensus" }
+state-sync = { path = "../state-sync" }
+local-planner = { path = "../local-planner" }
+resource-monitor = { path = "../resource-monitor" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+criterion = { workspace = true }

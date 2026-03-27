@@ -46,6 +46,40 @@ pub struct BoundedConsensusConfig {
     pub max_rounds: u32,
     /// Round duration in milliseconds.
     pub round_duration_ms: u64,
+    /// Epoch number that increments each time the participant set changes.
+    /// Used to detect stale messages from old configurations.
+    pub membership_epoch: u64,
+}
+
+impl BoundedConsensusConfig {
+    /// Create a new configuration with the given participants.
+    pub fn new(
+        local_agent_id: AgentId,
+        participants: HashSet<AgentId>,
+        max_rounds: u32,
+        round_duration_ms: u64,
+    ) -> Self {
+        Self {
+            local_agent_id,
+            participants,
+            max_rounds,
+            round_duration_ms,
+            membership_epoch: 0,
+        }
+    }
+
+    /// Update the participant set and increment the epoch.
+    pub fn update_participants(&mut self, new_participants: HashSet<AgentId>) {
+        if self.participants != new_participants {
+            self.participants = new_participants;
+            self.membership_epoch += 1;
+        }
+    }
+
+    /// Get the current epoch.
+    pub fn epoch(&self) -> u64 {
+        self.membership_epoch
+    }
 }
 
 /// Trait for a bounded consensus protocol.
@@ -66,6 +100,10 @@ pub trait BoundedConsensus: Send + Sync {
 
     /// Get the current configuration.
     fn config(&self) -> &BoundedConsensusConfig;
+
+    /// Update the set of participants dynamically.
+    /// This may abort any ongoing consensus round.
+    async fn update_participants(&mut self, new_participants: HashSet<AgentId>) -> Result<()>;
 }
 
 /// Internal state of a two‑phase commit round.
@@ -243,6 +281,31 @@ impl<T> TwoPhaseBoundedConsensus<T> {
         }
         Ok(())
     }
+
+    /// Update the set of participants dynamically.
+    /// If a round is active, it will be aborted.
+    fn update_participants(&mut self, new_participants: HashSet<AgentId>) -> Result<()>
+    where
+        T: Clone + Serialize + for<'de> Deserialize<'de>,
+    {
+        info!(
+            "Updating participants from {:?} to {:?}",
+            self.config.participants, new_participants
+        );
+        // Abort any ongoing round
+        if let Some(round) = &mut self.current_round {
+            info!("Aborting active round {} due to membership change", round.proposal.id);
+            round.phase = Phase::Aborted;
+            if let Some(tx) = round.outcome_tx.take() {
+                let _ = tx.send(ConsensusOutcome::Aborted);
+            }
+            metrics::inc_consensus_rounds_completed();
+            self.current_round = None;
+        }
+        // Update configuration
+        self.config.update_participants(new_participants);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -355,6 +418,10 @@ where
 
     fn config(&self) -> &BoundedConsensusConfig {
         &self.config
+    }
+
+    async fn update_participants(&mut self, new_participants: HashSet<AgentId>) -> Result<()> {
+        self.update_participants(new_participants)
     }
 mod paxos;
 pub use paxos::PaxosConsensus;

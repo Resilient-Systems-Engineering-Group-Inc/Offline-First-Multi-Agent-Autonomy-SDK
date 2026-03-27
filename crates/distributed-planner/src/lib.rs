@@ -25,6 +25,15 @@ pub struct Task {
     /// Capability requirements (e.g., "camera", "gripper", "navigation").
     pub required_capabilities: Vec<Capability>,
     pub estimated_duration_secs: u64,
+    /// Deadline as Unix timestamp (seconds). If None, no deadline.
+    #[serde(default)]
+    pub deadline: Option<u64>,
+    /// Priority from 0 (lowest) to 255 (highest).
+    #[serde(default)]
+    pub priority: u8,
+    /// IDs of tasks that must be completed before this task can start.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
 }
 
 /// Assignment of a task to an agent.
@@ -34,6 +43,18 @@ pub struct Assignment {
     pub agent_id: AgentId,
     pub start_time: Option<u64>,
     pub status: AssignmentStatus,
+    /// Deadline copied from the task (optional).
+    #[serde(default)]
+    pub deadline: Option<u64>,
+    /// Priority copied from the task.
+    #[serde(default)]
+    pub priority: u8,
+    /// Whether dependencies are satisfied.
+    #[serde(default)]
+    pub dependencies_satisfied: bool,
+    /// Estimated finish time (start_time + estimated_duration_secs).
+    #[serde(default)]
+    pub estimated_finish_time: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +64,22 @@ pub enum AssignmentStatus {
     InProgress,
     Completed,
     Failed,
+}
+
+impl Task {
+    /// Create a new assignment for this task, assigned to the given agent.
+    pub fn create_assignment(&self, agent_id: AgentId) -> Assignment {
+        Assignment {
+            task_id: self.id.clone(),
+            agent_id,
+            start_time: None,
+            status: AssignmentStatus::Pending,
+            deadline: self.deadline,
+            priority: self.priority,
+            dependencies_satisfied: self.dependencies.is_empty(),
+            estimated_finish_time: None,
+        }
+    }
 }
 
 /// Configuration for the distributed planner.
@@ -198,3 +235,14 @@ impl DistributedPlanner<TwoPhaseBoundedConsensus<Assignment>> {
         self.task_sync.apply_delta(delta);
     }
 }
+// Re‑export planning algorithms for convenience.
+pub use algorithms::{
+    PlanningAlgorithm,
+    RoundRobinPlanner,
+    AuctionPlanner,
+    ResourceAwarePlanner,
+    CapabilityAwarePlanner,
+    DeadlineAwarePlanner,
+    DependencyAwarePlanner,
+    ConsensusPlanner,
+};

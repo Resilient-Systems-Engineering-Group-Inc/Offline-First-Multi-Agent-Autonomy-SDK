@@ -8,6 +8,8 @@ members = [
     "crates/resource-monitor",
     "crates/bounded-consensus",
     "crates/distributed-planner",
+    "crates/swarm-simulator",
+    "crates/ros2-adapter",
 ]
 resolver = "2"
 

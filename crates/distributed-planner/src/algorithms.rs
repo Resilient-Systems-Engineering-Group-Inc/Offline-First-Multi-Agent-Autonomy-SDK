@@ -39,12 +39,7 @@ impl PlanningAlgorithm for RoundRobinPlanner {
         let mut assignments = Vec::new();
         for (i, task) in tasks.into_iter().enumerate() {
             let agent_idx = i % agents.len();
-            let assignment = Assignment {
-                task_id: task.id,
-                agent_id: agents[agent_idx],
-                start_time: None,
-                status: crate::AssignmentStatus::Pending,
-            };
+            let assignment = task.create_assignment(agents[agent_idx]);
             assignments.push(assignment);
         }
         Ok(assignments)
@@ -93,12 +88,7 @@ impl PlanningAlgorithm for AuctionPlanner {
                 }
             }
             if let Some(agent) = best_agent {
-                assignments.push(Assignment {
-                    task_id: task.id,
-                    agent_id: agent,
-                    start_time: None,
-                    status: crate::AssignmentStatus::Pending,
-                });
+                assignments.push(task.create_assignment(agent));
             }
         }
         Ok(assignments)
@@ -154,12 +144,7 @@ impl PlanningAlgorithm for ResourceAwarePlanner {
                 }
             }
             if let Some(agent) = best_agent {
-                assignments.push(Assignment {
-                    task_id: task.id,
-                    agent_id: agent,
-                    start_time: None,
-                    status: crate::AssignmentStatus::Pending,
-                });
+                assignments.push(task.create_assignment(agent));
             }
         }
         Ok(assignments)
@@ -202,12 +187,7 @@ impl PlanningAlgorithm for CapabilityAwarePlanner {
                 }
             }
             if let Some(agent) = best_agent {
-                assignments.push(Assignment {
-                    task_id: task.id,
-                    agent_id: agent,
-                    start_time: None,
-                    status: crate::AssignmentStatus::Pending,
-                });
+                assignments.push(task.create_assignment(agent));
             }
         }
         Ok(assignments)
@@ -218,6 +198,88 @@ impl PlanningAlgorithm for CapabilityAwarePlanner {
     }
 }
 
+/// Deadline‑aware planner that assigns tasks with earliest deadline first.
+pub struct DeadlineAwarePlanner;
+
+#[async_trait::async_trait]
+impl PlanningAlgorithm for DeadlineAwarePlanner {
+    async fn plan(
+        &self,
+        tasks: Vec<Task>,
+        agents: HashSet<AgentId>,
+        _current_assignments: Vec<Assignment>,
+    ) -> Result<Vec<Assignment>> {
+        // Sort tasks by deadline (earliest first), tasks without deadline go last
+        let mut sorted_tasks = tasks;
+        sorted_tasks.sort_by(|a, b| {
+            match (a.deadline, b.deadline) {
+                (Some(da), Some(db)) => da.cmp(&db),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
+        });
+        // Simple round‑robin assignment after sorting
+        let agents: Vec<AgentId> = agents.into_iter().collect();
+        if agents.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut assignments = Vec::new();
+        for (i, task) in sorted_tasks.into_iter().enumerate() {
+            let agent_idx = i % agents.len();
+            assignments.push(task.create_assignment(agents[agent_idx]));
+        }
+        Ok(assignments)
+    }
+
+    fn name(&self) -> &'static str {
+        "deadline_aware"
+    }
+}
+
+/// Dependency‑aware planner that ensures tasks are assigned only after their dependencies are satisfied.
+pub struct DependencyAwarePlanner;
+
+#[async_trait::async_trait]
+impl PlanningAlgorithm for DependencyAwarePlanner {
+    async fn plan(
+        &self,
+        tasks: Vec<Task>,
+        agents: HashSet<AgentId>,
+        current_assignments: Vec<Assignment>,
+    ) -> Result<Vec<Assignment>> {
+        // Build a map from task id to its completion status based on current assignments
+        let completed_tasks: HashSet<String> = current_assignments
+            .iter()
+            .filter(|a| a.status == crate::AssignmentStatus::Completed)
+            .map(|a| a.task_id.clone())
+            .collect();
+        // Filter tasks whose dependencies are all completed (or no dependencies)
+        let ready_tasks: Vec<Task> = tasks
+            .into_iter()
+            .filter(|task| {
+                task.dependencies
+                    .iter()
+                    .all(|dep_id| completed_tasks.contains(dep_id))
+            })
+            .collect();
+        // Assign ready tasks using round‑robin (could be any other algorithm)
+        let agents: Vec<AgentId> = agents.into_iter().collect();
+        if agents.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut assignments = Vec::new();
+        for (i, task) in ready_tasks.into_iter().enumerate() {
+            let agent_idx = i % agents.len();
+            assignments.push(task.create_assignment(agents[agent_idx]));
+        }
+        Ok(assignments)
+    }
+
+    fn name(&self) -> &'static str {
+        "dependency_aware"
+    }
+}
 /// Consensus‑based planner that uses bounded consensus to agree on assignments.
 /// This is a wrapper around the existing consensus mechanism.
 pub struct ConsensusPlanner;
