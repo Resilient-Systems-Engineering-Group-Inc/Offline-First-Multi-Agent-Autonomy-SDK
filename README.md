@@ -21,15 +21,22 @@ Enable groups of agents (robots, drones, edge devices) to collaborate reliably w
 - **Bounded Consensus**: Two‑phase commit protocol for agreement within bounded rounds.
 - **Delta Compression & Batching**: Optimized CRDT delta serialization with compression (Zlib) and deduplication.
 - **Web Monitor**: Built‑in web interface for real‑time agent monitoring.
+- **Distributed Task Planning**: Algorithms for coordinating tasks across agents (round‑robin, auction, resource‑aware).
+- **Resource Monitoring & Alerting**: Collect system metrics (CPU, battery, memory) and trigger alerts based on thresholds.
+- **State Migration**: Tools for upgrading CRDT schema versions without data loss.
+- **Multiple Transport Backends**: Support for libp2p, in‑memory, WebRTC, and LoRa (stub) backends.
+- **Swarm Simulation & Visualization**: Terminal‑based real‑time visualization of agent interactions.
 
 ## 🏗️ Architecture
 
 ```
 Agent Core
 ├── Local Planner        – Decision‑making and task allocation
+├── Distributed Planner  – Multi‑agent task coordination
 ├── State Sync (CRDT)    – Conflict‑free state synchronization
-├── Mesh Transport       – Peer discovery and message routing
-└── Resource Monitor     – CPU, memory, battery, network monitoring
+├── Mesh Transport       – Peer discovery and message routing (libp2p, WebRTC, LoRa)
+├── Resource Monitor     – CPU, memory, battery, network monitoring with alerting
+└── Bounded Consensus   – Agreement within bounded rounds
 ```
 
 The SDK is organized as a Rust workspace with the following crates:
@@ -37,13 +44,14 @@ The SDK is organized as a Rust workspace with the following crates:
 | Crate | Description |
 |-------|-------------|
 | `common` | Shared types, error handling, utilities (CBOR serialization). |
-| `mesh‑transport` | Mesh networking with libp2p backend, discovery, connection management, in‑memory simulation. |
-| `state‑sync` | CRDT‑based map, delta‑based synchronization, vector clocks, compression, batching, deduplication. |
+| `mesh‑transport` | Mesh networking with libp2p backend, discovery, connection management, in‑memory simulation, WebRTC and LoRa stubs. |
+| `state‑sync` | CRDT‑based map, delta‑based synchronization, vector clocks, compression, batching, deduplication, state migration. |
 | `agent‑core` | High‑level agent abstraction integrating transport and state sync. |
 | `local‑planner` | Trait and implementations for autonomous decision‑making. |
-| `resource‑monitor` | System resource tracking (CPU, memory, battery, network). |
+| `distributed‑planner` | Distributed task planning algorithms (round‑robin, auction, resource‑aware, consensus). |
+| `resource‑monitor` | System resource tracking (CPU, memory, battery, network) with alerting. |
 | `bounded‑consensus` | Bounded‑round consensus protocol (two‑phase commit) for agreement. |
-| `python/` | PyO3 bindings for Python integration with async support. |
+| `python/` | PyO3 bindings for Python integration with async support, covering all major components. |
 
 ## 🚀 Getting Started
 
@@ -82,6 +90,12 @@ cargo run --example web_monitor
 ```
 Then open http://127.0.0.1:3030 in your browser.
 
+**Swarm simulation with real‑time visualization** (terminal‑based):
+
+```bash
+cargo run --example swarm_simulation
+```
+
 **ROS2/Gazebo simulation example** (dummy simulation):
 
 ```bash
@@ -91,16 +105,12 @@ python simple_robot.py
 
 ### In‑Memory Backend for Testing
 
-The SDK includes an in‑memory transport backend that simulates network communication within a single process, ideal for unit tests and simulations. Enable it by setting `use_in_memory: true` in `MeshTransportConfig`.
+The SDK includes an in‑memory transport backend that simulates network communication within a single process, ideal for unit tests and simulations. Enable it by setting `backend_type: BackendType::InMemory` in `MeshTransportConfig`.
 
 Example:
 
 ```rust
-let config = MeshTransportConfig {
-    local_agent_id: AgentId(1),
-    use_in_memory: true,
-    ..Default::default()
-};
+let config = MeshTransportConfig::in_memory();
 ```
 
 ### Integration Tests
@@ -130,12 +140,19 @@ To use it, add `bounded-consensus` as a dependency and implement the `BoundedCon
 2. Write a Python script:
 
    ```python
-   from offline_first_autonomy import PyAgent
+   from offline_first_autonomy import PyAgent, PyDistributedPlanner, PyResourceMonitor
 
    agent = PyAgent(42)
    agent.start()
    agent.set_value("counter", "123")
-   # ...
+
+   planner = PyDistributedPlanner(1, [1, 2, 3])
+   planner.start()
+   planner.add_task("task1", "Move to point A", [], 10)
+
+   monitor = PyResourceMonitor(1)
+   cpu = monitor.cpu_usage()
+   print(f"CPU usage: {cpu}%")
    ```
 
 ## 📖 Documentation
@@ -162,7 +179,7 @@ cargo bench -p state-sync
 
 ### Adding a New Transport Backend
 
-Implement the `Transport` trait (see `crates/mesh‑transport/src/transport.rs`) and plug it into `MeshTransport`.
+Implement the `Backend` trait (see `crates/mesh‑transport/src/backend.rs`) and add a variant to `BackendType` in `transport.rs`.
 
 ### Implementing a Custom Local Planner
 
@@ -171,6 +188,10 @@ Implement the `LocalPlanner` trait (see `crates/local‑planner/src/lib.rs`) and
 ### Adding New CRDT Types
 
 Extend `state‑sync` with new CRDT structures that implement the `Crdt` trait.
+
+### Adding a New Planning Algorithm
+
+Implement the `PlanningAlgorithm` trait in `distributed‑planner/src/algorithms.rs` and register it with `DistributedPlanner`.
 
 ## 🤝 Contributing
 

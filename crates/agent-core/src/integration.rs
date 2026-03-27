@@ -18,14 +18,24 @@ pub struct IntegrationAdapter {
 
 impl IntegrationAdapter {
     /// Create a new integration adapter.
-    pub fn new(transport: MeshTransport, state_sync: Box<dyn StateSync>) -> Self {
+    /// If `fault_tx` is provided, all transport events will be forwarded to it.
+    pub fn new(
+        transport: MeshTransport,
+        state_sync: Box<dyn StateSync>,
+        fault_tx: Option<mpsc::UnboundedSender<TransportEvent>>,
+    ) -> Self {
         let event_rx = transport.events();
         // Convert stream to channel for simplicity (in reality we'd keep the stream)
         let (tx, rx) = mpsc::unbounded_channel();
         tokio::spawn(async move {
             let mut stream = event_rx;
             while let Some(event) = stream.next().await {
-                let _ = tx.send(event);
+                // Forward to internal channel
+                let _ = tx.send(event.clone());
+                // Forward to fault tolerance channel if present
+                if let Some(ref fault_tx) = fault_tx {
+                    let _ = fault_tx.send(event);
+                }
             }
         });
 
@@ -48,6 +58,15 @@ impl IntegrationAdapter {
                 }
                 TransportEvent::PeerDiscovered(peer) => {
                     tracing::info!("Peer discovered: {:?}", peer);
+                }
+                TransportEvent::PeerLost(peer) => {
+                    tracing::warn!("Peer lost: {:?}", peer);
+                }
+                TransportEvent::ConnectionEstablished(peer) => {
+                    tracing::info!("Connection established with {:?}", peer);
+                }
+                TransportEvent::ConnectionClosed(peer) => {
+                    tracing::info!("Connection closed with {:?}", peer);
                 }
                 _ => {}
             }

@@ -52,3 +52,23 @@ impl VectorClock {
         true
     }
 }
+
+/// A capability that an agent can possess (e.g., "camera", "gripper", "compute_heavy").
+pub type Capability = String;
+
+/// Static capabilities and resource limits of an agent.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentCapabilities {
+    /// List of capabilities (strings) that this agent provides.
+    pub capabilities: Vec<Capability>,
+    /// Maximum CPU cores (if applicable).
+    pub max_cpu_cores: Option<u32>,
+    /// Maximum memory in bytes.
+    pub max_memory_bytes: Option<u64>,
+    /// Maximum disk space in bytes.
+    pub max_disk_bytes: Option<u64>,
+    /// Whether the agent has a battery.
+    pub has_battery: bool,
+    /// Other custom attributes.
+    pub custom_attrs: std::collections::HashMap<String, String>,
+}

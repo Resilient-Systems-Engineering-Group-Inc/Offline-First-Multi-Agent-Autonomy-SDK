@@ -18,6 +18,10 @@ common = { path = "../crates/common" }
 mesh-transport = { path = "../crates/mesh-transport" }
 state-sync = { path = "../crates/state-sync" }
 agent-core = { path = "../crates/agent-core" }
+distributed-planner = { path = "../crates/distributed-planner" }
+bounded-consensus = { path = "../crates/bounded-consensus" }
+local-planner = { path = "../crates/local-planner" }
+resource-monitor = { path = "../crates/resource-monitor" }
 
 [profile.release]
 opt-level = 3

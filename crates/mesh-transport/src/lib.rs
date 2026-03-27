@@ -8,5 +8,7 @@ pub mod transport;
 pub mod libp2p_backend;
 pub mod security;
 pub mod in_memory_backend;
+pub mod webrtc_backend;
+pub mod lora_backend;
 
 pub use transport::{MeshTransport, MeshTransportConfig, TransportEvent};

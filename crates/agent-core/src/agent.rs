@@ -1,10 +1,12 @@
 //! High‑level agent abstraction.
 
 use crate::integration::IntegrationAdapter;
+use crate::fault_tolerance::FaultToleranceManager;
 use common::types::AgentId;
 use common::error::Result;
 use mesh_transport::{MeshTransport, MeshTransportConfig};
 use state_sync::{DefaultStateSync, StateSync};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 /// A full‑fledged agent combining transport, state sync, and application logic.
@@ -12,6 +14,7 @@ pub struct Agent {
     id: AgentId,
     integration: IntegrationAdapter,
     task_handle: Option<JoinHandle<Result<()>>>,
+    fault_handle: Option<JoinHandle<()>>,
 }
 
 impl Agent {
@@ -19,12 +22,22 @@ impl Agent {
     pub fn new(id: AgentId, config: MeshTransportConfig) -> Result<Self> {
         let transport = MeshTransport::new(config)?;
         let state_sync = Box::new(DefaultStateSync::new(id));
-        let integration = IntegrationAdapter::new(transport, state_sync);
+
+        // Create channel for fault tolerance events
+        let (fault_tx, fault_rx) = mpsc::unbounded_channel();
+        let integration = IntegrationAdapter::new(transport, state_sync, Some(fault_tx));
+
+        // Start fault tolerance manager in background
+        let fault_manager = FaultToleranceManager::new(fault_rx);
+        let fault_handle = tokio::spawn(async move {
+            fault_manager.run().await;
+        });
 
         Ok(Self {
             id,
             integration,
             task_handle: None,
+            fault_handle: Some(fault_handle),
         })
     }
 
@@ -43,6 +56,10 @@ impl Agent {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
             let _ = handle.await;
+        }
+        if let Some(fault_handle) = self.fault_handle.take() {
+            fault_handle.abort();
+            let _ = fault_handle.await;
         }
         Ok(())
     }

@@ -5,6 +5,10 @@ use rand_core::OsRng;
 use serde::{Serialize, Deserialize};
 use serde_bytes::Bytes;
 use thiserror::Error;
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::aead::{Aead, NewAead};
+use x25519_dalek::{PublicKey, StaticSecret, SharedSecret};
+use std::convert::TryInto;
 
 /// Errors that can occur during security operations.
 #[derive(Error, Debug)]
@@ -15,6 +19,14 @@ pub enum SecurityError {
     Serialization(#[from] bincode::Error),
     #[error("Key generation error")]
     KeyGeneration,
+    #[error("Encryption error")]
+    Encryption,
+    #[error("Decryption error")]
+    Decryption,
+    #[error("Invalid key length")]
+    InvalidKeyLength,
+    #[error("Invalid nonce length")]
+    InvalidNonceLength,
 }
 
 /// A key pair for signing messages.
@@ -128,6 +140,141 @@ impl SecurityManager {
     }
 }
 
+// --- Encryption ---
+
+/// Generate a random 256‑bit key for symmetric encryption.
+pub fn generate_symmetric_key() -> [u8; 32] {
+    let mut key = [0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    key
+}
+
+/// Encrypt a message with ChaCha20‑Poly1305.
+pub fn encrypt(key: &[u8; 32], nonce: &[u8; 12], plaintext: &[u8]) -> Result<Vec<u8>, SecurityError> {
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let nonce = Nonce::from_slice(nonce);
+    cipher.encrypt(nonce, plaintext)
+        .map_err(|_| SecurityError::Encryption)
+}
+
+/// Decrypt a message with ChaCha20‑Poly1305.
+pub fn decrypt(key: &[u8; 32], nonce: &[u8; 12], ciphertext: &[u8]) -> Result<Vec<u8>, SecurityError> {
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let nonce = Nonce::from_slice(nonce);
+    cipher.decrypt(nonce, ciphertext)
+        .map_err(|_| SecurityError::Decryption)
+}
+
+/// Generate a random nonce.
+pub fn generate_nonce() -> [u8; 12] {
+    let mut nonce = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce);
+    nonce
+}
+
+// --- Diffie‑Hellman key exchange ---
+
+/// A Diffie‑Hellman key pair (X25519).
+pub struct DhKeyPair {
+    secret: StaticSecret,
+    public: PublicKey,
+}
+
+impl DhKeyPair {
+    pub fn generate() -> Self {
+        let secret = StaticSecret::new(OsRng);
+        let public = PublicKey::from(&secret);
+        Self { secret, public }
+    }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.public
+    }
+
+    /// Compute shared secret with another public key.
+    pub fn diffie_hellman(&self, other_public: &PublicKey) -> SharedSecret {
+        self.secret.diffie_hellman(other_public)
+    }
+}
+
+/// An encrypted message that includes the nonce and optional sender's ephemeral public key.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EncryptedMessage {
+    /// Nonce used for encryption.
+    #[serde(with = "serde_bytes")]
+    pub nonce: Vec<u8>,
+    /// Ephemeral public key for key exchange (if using ECDH).
+    #[serde(with = "serde_bytes")]
+    pub ephemeral_public_key: Option<Vec<u8>>,
+    /// The ciphertext.
+    #[serde(with = "serde_bytes")]
+    pub ciphertext: Vec<u8>,
+}
+
+impl EncryptedMessage {
+    /// Encrypt a plaintext with a symmetric key.
+    pub fn encrypt_with_key(plaintext: &[u8], key: &[u8; 32]) -> Result<Self, SecurityError> {
+        let nonce = generate_nonce();
+        let ciphertext = encrypt(key, &nonce, plaintext)?;
+        Ok(Self {
+            nonce: nonce.to_vec(),
+            ephemeral_public_key: None,
+            ciphertext,
+        })
+    }
+
+    /// Decrypt with a symmetric key.
+    pub fn decrypt_with_key(&self, key: &[u8; 32]) -> Result<Vec<u8>, SecurityError> {
+        let nonce: [u8; 12] = self.nonce.as_slice().try_into()
+            .map_err(|_| SecurityError::InvalidNonceLength)?;
+        decrypt(key, &nonce, &self.ciphertext)
+    }
+
+    /// Encrypt using a Diffie‑Hellman key exchange (hybrid encryption).
+    /// The sender uses their ephemeral key pair and the recipient's static public key.
+    pub fn encrypt_hybrid(
+        plaintext: &[u8],
+        recipient_public: &PublicKey,
+    ) -> Result<(Self, DhKeyPair), SecurityError> {
+        let ephemeral = DhKeyPair::generate();
+        let shared_secret = ephemeral.diffie_hellman(recipient_public);
+        // Derive a symmetric key from the shared secret (simple hash for demonstration)
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(shared_secret.as_bytes());
+        let symmetric_key: [u8; 32] = hasher.finalize().into();
+
+        let nonce = generate_nonce();
+        let ciphertext = encrypt(&symmetric_key, &nonce, plaintext)?;
+
+        let message = Self {
+            nonce: nonce.to_vec(),
+            ephemeral_public_key: Some(ephemeral.public_key().as_bytes().to_vec()),
+            ciphertext,
+        };
+        Ok((message, ephemeral))
+    }
+
+    /// Decrypt hybrid encryption using the recipient's static secret.
+    pub fn decrypt_hybrid(
+        &self,
+        recipient_secret: &StaticSecret,
+    ) -> Result<Vec<u8>, SecurityError> {
+        let ephemeral_public = self.ephemeral_public_key.as_ref()
+            .ok_or(SecurityError::Decryption)?;
+        let ephemeral_public = PublicKey::from(ephemeral_public.as_slice().try_into()
+            .map_err(|_| SecurityError::InvalidKeyLength)?);
+        let shared_secret = recipient_secret.diffie_hellman(&ephemeral_public);
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(shared_secret.as_bytes());
+        let symmetric_key: [u8; 32] = hasher.finalize().into();
+
+        let nonce: [u8; 12] = self.nonce.as_slice().try_into()
+            .map_err(|_| SecurityError::InvalidNonceLength)?;
+        decrypt(&symmetric_key, &nonce, &self.ciphertext)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +303,45 @@ mod tests {
         let payload = vec![5, 6, 7];
         let signed = manager.sign(payload);
         assert!(manager.verify(&signed).is_ok());
+    }
+
+    #[test]
+    fn test_symmetric_encryption() {
+        let key = generate_symmetric_key();
+        let nonce = generate_nonce();
+        let plaintext = b"secret message";
+        let ciphertext = encrypt(&key, &nonce, plaintext).unwrap();
+        let decrypted = decrypt(&key, &nonce, &ciphertext).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encrypted_message() {
+        let key = generate_symmetric_key();
+        let plaintext = b"hello";
+        let enc = EncryptedMessage::encrypt_with_key(plaintext, &key).unwrap();
+        let decrypted = enc.decrypt_with_key(&key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_diffie_hellman() {
+        let alice = DhKeyPair::generate();
+        let bob = DhKeyPair::generate();
+        let alice_shared = alice.diffie_hellman(&bob.public_key());
+        let bob_shared = bob.diffie_hellman(&alice.public_key());
+        assert_eq!(alice_shared.as_bytes(), bob_shared.as_bytes());
+    }
+
+    #[test]
+    fn test_hybrid_encryption() {
+        let recipient = DhKeyPair::generate();
+        let plaintext = b"hybrid secret";
+        let (enc, sender_ephemeral) = EncryptedMessage::encrypt_hybrid(
+            plaintext,
+            &recipient.public_key(),
+        ).unwrap();
+        let decrypted = enc.decrypt_hybrid(&recipient.secret).unwrap();
+        assert_eq!(decrypted, plaintext);
     }
 }

@@ -1,0 +1,32 @@
+[package]
+name = "cloud-integration"
+version = "0.1.0"
+edition = "2021"
+description = "Cloud service integration (AWS IoT, Azure IoT) for hybrid deployments"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+common = { path = "../common" }
+mesh-transport = { path = "../mesh-transport" }
+# Cloud SDKs (optional features)
+aws-config = { version = "0.56", optional = true }
+aws-sdk-iotdataplane = { version = "0.30", optional = true }
+azure_iot_hub = { version = "0.1", optional = true }
+rumqttc = { version = "0.21", optional = true }
+
+[features]
+default = []
+aws = ["aws-config", "aws-sdk-iotdataplane"]
+azure = ["azure_iot_hub"]
+mqtt = ["rumqttc"]
+
+[dev-dependencies]
+criterion = { workspace = true }
