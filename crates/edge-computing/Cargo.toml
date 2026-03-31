@@ -1,0 +1,39 @@
+[package]
+name = "edge-computing"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Edge computing optimizations for the Offline‑First Multi‑Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["raspberry-pi", "nvidia-jetson"]
+raspberry-pi = ["rppal"]
+nvidia-jetson = ["jetson-gpio"]
+low-memory = []
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+bytes = "1.5"
+
+# Hardware‑specific dependencies (optional)
+rppal = { version = "0.14", optional = true }
+jetson-gpio = { git = "https://github.com/jetson-gpio/jetson-gpio-rs", optional = true }
+
+# Internal dependencies
+agent-core = { path = "../agent-core", version = "0.3" }
+mesh-transport = { path = "../mesh-transport", version = "0.3" }
+resource-monitor = { path = "../resource-monitor", version = "0.3" }
+configuration = { path = "../configuration", version = "0.1" }
+
+[dev-dependencies]
+tokio = { version = "1.38", features = ["full"] }
+tempfile = "3.0"

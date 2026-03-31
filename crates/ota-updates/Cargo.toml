@@ -1,0 +1,42 @@
+[package]
+name = "ota-updates"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Over‑the‑air updates for the Offline‑First Multi‑Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["signature-verification", "compression"]
+signature-verification = ["ring", "ed25519-dalek"]
+compression = ["flate2", "lz4"]
+delta = ["xdelta3"]
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+bytes = "1.5"
+ring = { version = "0.17", optional = true }
+ed25519-dalek = { version = "2.0", optional = true }
+flate2 = { version = "1.0", optional = true }
+lz4 = { version = "1.24", optional = true }
+xdelta3 = { version = "0.1", optional = true }
+reqwest = { version = "0.11", optional = true }
+tempfile = "3.0"
+
+# Internal dependencies
+mesh-transport = { path = "../mesh-transport", version = "0.3" }
+configuration = { path = "../configuration", version = "0.1" }
+audit = { path = "../audit", version = "0.1" }
+
+[dev-dependencies]
+tokio = { version = "1.38", features = ["full"] }
+tempfile = "3.0"

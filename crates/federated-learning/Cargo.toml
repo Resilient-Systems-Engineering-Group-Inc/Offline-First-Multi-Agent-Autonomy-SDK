@@ -1,0 +1,37 @@
+[package]
+name = "federated-learning"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Federated learning for the Offline‑First Multi‑Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["encryption", "differential-privacy"]
+encryption = ["homomorphic-encryption"]
+differential-privacy = ["rand", "noise"]
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+ndarray = "0.15"
+rand = { version = "0.8", optional = true }
+homomorphic-encryption = { git = "https://github.com/example/homomorphic-encryption-rs", optional = true }
+noise = { version = "0.8", optional = true }
+
+# Internal dependencies
+mesh-transport = { path = "../mesh-transport", version = "0.3" }
+configuration = { path = "../configuration", version = "0.1" }
+audit = { path = "../audit", version = "0.1" }
+
+[dev-dependencies]
+tokio = { version = "1.38", features = ["full"] }
+tempfile = "3.0"

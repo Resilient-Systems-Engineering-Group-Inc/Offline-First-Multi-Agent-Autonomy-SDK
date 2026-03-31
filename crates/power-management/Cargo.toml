@@ -1,0 +1,35 @@
+[package]
+name = "power-management"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Power management for edge devices in the Offline‑First Multi‑Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["battery", "cpu-freq"]
+battery = ["sysinfo"]
+cpu-freq = ["cpufreq"]
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+sysinfo = { version = "0.29", optional = true }
+cpufreq = { version = "0.4", optional = true }
+
+# Internal dependencies
+resource-monitor = { path = "../resource-monitor", version = "0.3" }
+edge-computing = { path = "../edge-computing", version = "0.1" }
+configuration = { path = "../configuration", version = "0.1" }
+
+[dev-dependencies]
+tokio = { version = "1.38", features = ["full"] }
+tempfile = "3.0"

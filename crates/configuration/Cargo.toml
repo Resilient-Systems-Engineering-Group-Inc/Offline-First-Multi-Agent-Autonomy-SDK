@@ -1,0 +1,34 @@
+[package]
+name = "configuration"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Centralized configuration management for the Offline‑First Multi‑Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["hot-reload"]
+hot-reload = ["notify", "tokio/fs"]
+validation = ["validator"]
+watch = ["notify"]
+
+[dependencies]
+tokio = { version = "1.38", features = ["sync", "time"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+validator = { version = "0.18", optional = true }
+notify = { version = "6.1", optional = true }
+async-trait = "0.1"
+futures = "0.3"
+lazy_static = "1.4"
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio = { version = "1.38", features = ["full"] }

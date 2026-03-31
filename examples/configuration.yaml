@@ -1,0 +1,44 @@
+# Example configuration for Offline‑First Multi‑Agent Autonomy SDK
+
+mesh:
+  backend: "libp2p"
+  listen_addr: "0.0.0.0:5000"
+  bootstrap_peers:
+    - "/ip4/192.168.1.100/tcp/5000/p2p/QmPeer1"
+    - "/ip4/192.168.1.101/tcp/5000/p2p/QmPeer2"
+  enable_encryption: true
+  enable_discovery: true
+
+agent:
+  agent_id: "agent-001"
+  max_concurrent_tasks: 20
+  heartbeat_interval_secs: 5
+  fault_tolerance: true
+
+state_sync:
+  sync_interval_secs: 2
+  delta_compression: true
+  persistence: true
+
+resource_monitor:
+  collection_interval_secs: 10
+  thresholds:
+    cpu_percent: 80.0
+    memory_percent: 85.0
+    disk_percent: 90.0
+
+planning:
+  planner_type: "distributed"
+  deadline_aware: true
+  dependency_aware: true
+
+security:
+  enable_authentication: false
+  enable_encryption: true
+  shared_secret: ""
+
+logging:
+  level: "info"
+  json: false
+  file: "/var/log/autonomy.log"
+  prometheus: true

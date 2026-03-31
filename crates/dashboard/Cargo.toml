@@ -1,0 +1,43 @@
+[package]
+name = "dashboard"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Web dashboard for monitoring and controlling the multi‑agent system"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+yew = { version = "0.21", features = ["csr"] }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlElement", "WebSocket", "console"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+gloo-net = "0.4"
+gloo-timers = "0.2"
+gloo-console = "0.2"
+gloo-utils = "0.2"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-wasm = "0.2"
+
+# Internal dependencies (optional, for direct integration)
+common = { path = "../common", version = "0.3", optional = true }
+mesh-transport = { path = "../mesh-transport", version = "0.3", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+trunk = "0.19"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-mutable-globals"]
