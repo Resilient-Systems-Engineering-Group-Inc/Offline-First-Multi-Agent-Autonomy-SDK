@@ -1,0 +1,28 @@
+[package]
+name = "dependency-graph"
+version = "0.1.0"
+edition = "2021"
+description = "Dependency graph management for multi-agent systems"
+license = "BSD-3-Clause"
+authors = ["Resilient Systems Engineering Group, Inc"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["sync", "time", "macros"] }
+futures = "0.3"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+petgraph = "0.6"
+tracing = "0.1"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+criterion = "0.5"
+
+[[bench]]
+name = "graph_bench"
+harness = false

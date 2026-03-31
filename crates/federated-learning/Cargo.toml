@@ -2,16 +2,16 @@
 name = "federated-learning"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
+authors = ["Resilient Systems Engineering Group, Inc"]
 description = "Federated learning for the Offline‑First Multi‑Agent Autonomy SDK"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+license = "BSD-3-Clause"
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
 readme = "README.md"
 
 [features]
 default = ["encryption", "differential-privacy"]
 encryption = ["homomorphic-encryption"]
-differential-privacy = ["rand", "noise"]
+differential-privacy = ["rand", "rand_distr"]
 
 [dependencies]
 tokio = { version = "1.38", features = ["full"] }
@@ -22,16 +22,12 @@ thiserror = "2.0"
 tracing = "0.1"
 async-trait = "0.1"
 futures = "0.3"
-ndarray = "0.15"
-rand = { version = "0.8", optional = true }
-homomorphic-encryption = { git = "https://github.com/example/homomorphic-encryption-rs", optional = true }
-noise = { version = "0.8", optional = true }
+rand = { version = "0.8", features = ["small_rng"] }
+rand_distr = "0.4"
 
 # Internal dependencies
-mesh-transport = { path = "../mesh-transport", version = "0.3" }
-configuration = { path = "../configuration", version = "0.1" }
-audit = { path = "../audit", version = "0.1" }
+common = { path = "../common", version = "0.3.0" }
 
 [dev-dependencies]
 tokio = { version = "1.38", features = ["full"] }
-tempfile = "3.0"
+tracing-subscriber = "0.3"

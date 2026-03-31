@@ -25,6 +25,9 @@ members = [
     "crates/digital-twin",
     "crates/quantum-computing",
     "crates/power-management",
+    "crates/dependency-graph",
+    "crates/autoscaling",
+    "crates/monitoring-integration",
 ]
 resolver = "2"
 

@@ -45,6 +45,20 @@ impl ConfigurationManager {
         Ok(())
     }
 
+    /// Update configuration with a new configuration object.
+    pub fn update(&mut self, new_config: Configuration) -> Result<(), Error> {
+        self.validator.validate(&new_config)?;
+        *self.config.write().blocking_write() = new_config;
+        Ok(())
+    }
+
+    /// Update configuration asynchronously.
+    pub async fn update_async(&self, new_config: Configuration) -> Result<(), Error> {
+        self.validator.validate(&new_config)?;
+        *self.config.write().await = new_config;
+        Ok(())
+    }
+
     /// Start a background task that watches the configuration file for changes
     /// and automatically reloads (requires `watch` feature).
     #[cfg(feature = "watch")]

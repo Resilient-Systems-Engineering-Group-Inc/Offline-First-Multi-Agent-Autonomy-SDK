@@ -1,0 +1,59 @@
+Offline-First Multi-Agent Autonomy SDK
+Copyright (c) 2026, Resilient Systems Engineering Group, Inc
+All rights reserved.
+
+This product includes software developed by the project contributors.
+
+Third‑Party Notices
+===================
+
+This software incorporates or depends on the following third‑party components:
+
+- **Rust** – Mozilla Public License 2.0 or Apache 2.0
+  https://www.rust-lang.org/
+
+- **Tokio** – MIT License
+  https://github.com/tokio-rs/tokio
+
+- **Serde** – MIT or Apache 2.0
+  https://github.com/serde-rs/serde
+
+- **libp2p** – MIT or Apache 2.0
+  https://github.com/libp2p/rust-libp2p
+
+- **PyO3** – Apache 2.0
+  https://github.com/PyO3/pyo3
+
+- **Prometheus** – Apache 2.0
+  https://github.com/prometheus/client_rust
+
+- **Criterion** – Apache 2.0
+  https://github.com/bheisler/criterion.rs
+
+- **AWS SDK for Rust** – Apache 2.0
+  https://github.com/awslabs/aws-sdk-rust
+
+- **Azure SDK for Rust** – MIT
+  https://github.com/Azure/azure-sdk-for-rust
+
+- **Kubernetes Client** – Apache 2.0
+  https://github.com/kube-rs/kube
+
+- **Yew** – Apache 2.0
+  https://github.com/yewstack/yew
+
+- **ROS2 Rust bindings** – Apache 2.0
+  https://github.com/ros2-rust/ros2_rust
+
+- **Quantum computing simulators** – Various licenses (see respective projects)
+
+For exact licensing terms of each dependency, refer to the `Cargo.toml` files
+and the respective crate documentation.
+
+This software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in the
+software.

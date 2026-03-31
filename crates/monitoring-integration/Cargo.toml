@@ -1,0 +1,33 @@
+[package]
+name = "monitoring-integration"
+version = "0.1.0"
+edition = "2021"
+description = "Integration with external monitoring systems (Prometheus, Grafana, Jaeger)"
+license = "BSD-3-Clause"
+authors = ["Resilient Systems Engineering Group, Inc"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { version = "1.0", features = ["sync", "time", "macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-opentelemetry = "0.22"
+opentelemetry = { version = "0.22", features = ["rt-tokio", "metrics", "trace"] }
+opentelemetry-otlp = { version = "0.16", features = ["tonic", "tonic-build"] }
+prometheus = "0.13"
+warp = "0.3"
+reqwest = "0.11"
+async-trait = "0.1"
+lazy_static = "1.4"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+profiling = { path = "../profiling", version = "0.3.0" }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tracing-subscriber = "0.3"
