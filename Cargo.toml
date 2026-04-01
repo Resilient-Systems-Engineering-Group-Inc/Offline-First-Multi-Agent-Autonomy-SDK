@@ -28,6 +28,19 @@ members = [
     "crates/dependency-graph",
     "crates/autoscaling",
     "crates/monitoring-integration",
+    "crates/data-versioning",
+    "crates/distributed-cache",
+    "crates/database-integration",
+    "crates/rbac",
+    "crates/distributed-debugger",
+    "crates/agent-lifecycle",
+    "crates/geospatial",
+    "crates/auction-mechanism",
+    "crates/knowledge-graph",
+    "crates/api-integration",
+    "crates/ml-model-versioning",
+    "crates/event-driven",
+    "crates/backup-restore",
 ]
 resolver = "2"
 

@@ -1,0 +1,51 @@
+[package]
+name = "api-integration"
+version = "0.1.0"
+edition = "2021"
+description = "External API integration (REST, gRPC, GraphQL) for multi-agent systems"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+url = "2.5"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+bytes = { workspace = true }
+
+# gRPC dependencies
+tonic = { version = "0.11", optional = true }
+prost = { version = "0.12", optional = true }
+
+# GraphQL dependencies
+async-graphql = { version = "7.0", optional = true }
+async-graphql-warp = { version = "7.0", optional = true }
+warp = { version = "0.3", optional = true }
+
+# WebSocket support
+tokio-tungstenite = { version = "0.20", optional = true }
+
+# Internal dependencies
+common = { path = "../common" }
+mesh-transport = { path = "../mesh-transport" }
+agent-core = { path = "../agent-core" }
+
+[features]
+default = ["rest"]
+rest = ["reqwest"]
+grpc = ["dep:tonic", "dep:prost"]
+graphql = ["dep:async-graphql", "dep:async-graphql-warp", "dep:warp"]
+websocket = ["dep:tokio-tungstenite"]
+full = ["rest", "grpc", "graphql", "websocket"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true }

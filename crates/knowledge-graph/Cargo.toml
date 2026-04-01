@@ -1,0 +1,41 @@
+[package]
+name = "knowledge-graph"
+version = "0.1.0"
+edition = "2021"
+description = "Knowledge graph for representing and querying relationships between entities"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+
+# Graph database dependencies
+petgraph = { version = "0.6", features = ["serde-1"] }
+indexmap = { version = "2.0", features = ["serde"] }
+dashmap = "5.5"
+regex = "1.10"
+
+# Query language
+spargebra = { version = "0.4", optional = true } # SPARQL-like queries
+sparesults = { version = "0.4", optional = true }
+
+# Internal dependencies
+common = { path = "../common" }
+
+[features]
+default = []
+sparql = ["dep:spargebra", "dep:sparesults"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true }

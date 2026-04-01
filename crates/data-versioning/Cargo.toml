@@ -1,0 +1,28 @@
+[package]
+name = "data-versioning"
+version = "0.1.0"
+edition = "2021"
+description = "Data versioning with snapshots and rollback for offline-first multi-agent systems"
+license = "BSD-3-Clause"
+authors = ["Resilient Systems Engineering Group, Inc"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { version = "1.0", features = ["sync", "time", "macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+async-trait = "0.1"
+futures = "0.3"
+bytes = "1.5"
+lazy_static = "1.4"
+tracing = "0.1"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+state-sync = { path = "../state-sync", version = "0.3.0" }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tracing-subscriber = "0.3"

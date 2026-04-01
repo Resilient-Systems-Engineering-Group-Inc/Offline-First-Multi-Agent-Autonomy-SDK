@@ -1,0 +1,40 @@
+[package]
+name = "event-driven"
+version = "0.1.0"
+edition = "2021"
+description = "Event-driven architecture for multi-agent systems"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
+chrono = "0.4"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+dashmap = "5.5"
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# Internal dependencies
+common = { path = "../common" }
+mesh-transport = { path = "../mesh-transport", optional = true }
+agent-core = { path = "../agent-core", optional = true }
+
+[features]
+default = []
+mesh = ["dep:mesh-transport"]
+agent = ["dep:agent-core", "mesh"]
+full = ["mesh", "agent"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+test-log = "0.2"
