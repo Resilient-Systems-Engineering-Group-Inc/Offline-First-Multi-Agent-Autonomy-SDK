@@ -39,6 +39,15 @@ libp2p = { version = "0.54", default-features = false, features = [
     "request-response",
 ] }
 
+# Post‑quantum cryptography (optional)
+pqcrypto-kyber = { version = "0.7", optional = true }
+pqcrypto-dilithium = { version = "0.7", optional = true }
+pqcrypto-falcon = { version = "0.7", optional = true }
+
+[features]
+default = []
+post-quantum = ["pqcrypto-kyber", "pqcrypto-dilithium", "pqcrypto-falcon"]
+
 [dev-dependencies]
 criterion = { workspace = true }
 

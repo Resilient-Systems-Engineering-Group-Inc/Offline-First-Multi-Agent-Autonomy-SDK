@@ -46,6 +46,14 @@ members = [
     "crates/security-configuration",
     "crates/distributed-logging",
     "crates/hardware-acceleration",
+    "crates/partition-recovery",
+    "crates/infrastructure-integration",
+    "crates/data-quality",
+    "crates/workflow-orchestration",
+    "crates/incident-management",
+    "crates/metadata-management",
+    "crates/abac-integration",
+    "crates/secrets-management",
 ]
 resolver = "2"
 

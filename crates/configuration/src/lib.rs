@@ -11,9 +11,14 @@ pub mod manager;
 pub mod schema;
 pub mod validator;
 pub mod watch;
+pub mod versioning;
 
 pub use error::Error;
 pub use loader::{FileFormat, Loader};
 pub use manager::ConfigurationManager;
 pub use schema::Configuration;
 pub use validator::Validator;
+pub use versioning::{
+    ConfigurationDiff, ConfigurationVersion, ConfigurationVersionManager,
+    DiffSummary, FileVersionStorage, InMemoryVersionStorage, VersionStorage,
+};

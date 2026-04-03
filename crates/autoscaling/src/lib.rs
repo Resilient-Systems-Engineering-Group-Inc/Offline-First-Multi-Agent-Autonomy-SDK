@@ -8,9 +8,17 @@ pub mod policy;
 pub mod controller;
 pub mod metrics;
 pub mod scaler;
+pub mod advanced_scaling;
 
 pub use error::AutoscalingError;
 pub use policy::{ScalingPolicy, ThresholdPolicy, PredictivePolicy};
+pub use advanced_scaling::{
+    MetricsWindow,
+    PredictiveScalingPolicy,
+    MultiMetricScalingPolicy,
+    MultiMetricConfig,
+    PredictiveScalingConfig,
+};
 pub use controller::AutoscalingController;
 pub use scaler::{Scaler, AgentScaler};
 

@@ -27,6 +27,9 @@ pub enum SecurityError {
     InvalidKeyLength,
     #[error("Invalid nonce length")]
     InvalidNonceLength,
+    #[cfg(feature = "post-quantum")]
+    #[error("Post‑quantum error: {0}")]
+    PostQuantum(String),
 }
 
 /// A key pair for signing messages.

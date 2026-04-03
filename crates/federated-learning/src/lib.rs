@@ -11,7 +11,12 @@ pub mod error;
 pub mod model;
 pub mod server;
 pub mod privacy;
+pub mod distributed;
 
 pub use error::Error;
 pub use client::FederatedClient;
 pub use server::FederatedServer;
+pub use distributed::{
+    DistributedTrainingCoordinator, DistributedTrainingConfig, DistributedTrainingEvent,
+    DistributedTrainingStats, MeshFederatedIntegration, TrainingParticipant,
+};

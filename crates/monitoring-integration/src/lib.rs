@@ -25,12 +25,14 @@ pub mod error;
 pub mod grafana;
 pub mod jaeger;
 pub mod prometheus;
+pub mod distributed_tracing;
 
 pub use config::*;
 pub use error::*;
 pub use grafana::*;
 pub use jaeger::*;
 pub use prometheus::*;
+pub use distributed_tracing::*;
 
 use async_trait::async_trait;
 use std::sync::Arc;

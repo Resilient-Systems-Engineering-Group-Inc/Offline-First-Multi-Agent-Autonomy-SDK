@@ -1,0 +1,51 @@
+[package]
+name = "secrets-management"
+version = "0.1.0"
+edition = "2021"
+description = "Secure secrets management for offline‑first multi‑agent systems"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+keywords = ["secrets", "security", "vault", "encryption", "agents"]
+categories = ["cryptography", "api-bindings"]
+
+[features]
+default = ["encryption", "vault", "key-rotation"]
+encryption = ["aes-gcm", "chacha20poly1305", "ring"]
+vault = ["serde_json", "tokio", "async-trait"]
+key-rotation = ["chrono", "rand"]
+kubernetes = ["k8s-openapi", "kube"]
+aws = ["aws-sdk-secretsmanager"]
+azure = ["azure_security_keyvault"]
+hashicorp = ["reqwest", "serde_json"]
+in-memory = []
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+tokio = { version = "1.0", features = ["full"], optional = true }
+async-trait = { version = "0.1", optional = true }
+aes-gcm = { version = "0.10", optional = true }
+chacha20poly1305 = { version = "0.10", optional = true }
+ring = { version = "0.17", optional = true }
+chrono = { version = "0.4", optional = true }
+rand = { version = "0.8", optional = true }
+thiserror = "1.0"
+log = "0.4"
+zeroize = { version = "1.6", features = ["zeroize_derive"] }
+
+# External integrations (optional)
+k8s-openapi = { version = "0.21", optional = true }
+kube = { version = "0.86", optional = true }
+aws-sdk-secretsmanager = { version = "0.36", optional = true }
+azure_security_keyvault = { version = "0.12", optional = true }
+reqwest = { version = "0.11", optional = true }
+
+# Workspace dependencies
+common = { path = "../common", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.1.0", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tempfile = "3.8"
+anyhow = "1.0"

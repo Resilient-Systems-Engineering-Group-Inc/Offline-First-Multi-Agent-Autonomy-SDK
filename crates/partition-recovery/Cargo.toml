@@ -1,0 +1,27 @@
+[package]
+name = "partition-recovery"
+version = "0.1.0"
+edition = "2021"
+description = "Network partition detection and automatic recovery for offline‑first multi‑agent systems"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
+
+[dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+common = { path = "../common" }
+mesh-transport = { path = "../mesh-transport" }
+state-sync = { path = "../state-sync" }
+bounded-consensus = { path = "../bounded-consensus" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "partition_recovery_bench"
+harness = false
