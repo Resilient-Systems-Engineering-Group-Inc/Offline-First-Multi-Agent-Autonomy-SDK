@@ -1,0 +1,45 @@
+[package]
+name = "security-configuration"
+version = "0.1.0"
+edition = "2021"
+description = "Security configuration management for agent systems"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+bytes = { workspace = true }
+chrono = "0.4"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+ring = "0.17"
+rand = "0.8"
+base64 = "0.21"
+hex = "0.4"
+argon2 = { version = "0.5", optional = true }
+jsonwebtoken = { version = "9", optional = true }
+openssl = { version = "0.10", optional = true }
+
+# Internal dependencies
+common = { path = "../common" }
+configuration = { path = "../configuration" }
+mesh-transport = { path = "../mesh-transport", optional = true }
+rbac = { path = "../rbac", optional = true }
+
+[features]
+default = []
+crypto = ["dep:argon2", "dep:jsonwebtoken", "dep:openssl"]
+full = ["crypto", "mesh-transport", "rbac"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tempfile = "3.8"

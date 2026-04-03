@@ -1,0 +1,48 @@
+[package]
+name = "hardware-acceleration"
+version = "0.1.0"
+edition = "2021"
+description = "Hardware acceleration support (GPU, TPU, FPGA) for agent systems"
+license = "MIT OR Apache-2.0"
+authors = ["Offline-First Multi-Agent Autonomy SDK Contributors"]
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
+lazy_static = "1.4"
+
+# Optional dependencies for specific hardware backends
+wgpu = { version = "0.19", optional = true }
+opencl3 = { version = "0.6", optional = true }
+cuda-driver = { version = "0.1", optional = true }
+tract = { version = "0.20", optional = true, features = ["onnx"] }
+tch = { version = "0.14", optional = true }
+libloading = "0.8"
+
+# Internal dependencies
+common = { path = "../common" }
+configuration = { path = "../configuration", optional = true }
+resource-monitor = { path = "../resource-monitor", optional = true }
+
+[features]
+default = []
+gpu = ["dep:wgpu", "dep:opencl3"]
+cuda = ["dep:cuda-driver"]
+tpu = ["dep:tract"]
+ml = ["dep:tch"]
+monitoring = ["resource-monitor"]
+config = ["configuration"]
+full = ["gpu", "cuda", "tpu", "ml", "monitoring", "config"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tempfile = "3.8"

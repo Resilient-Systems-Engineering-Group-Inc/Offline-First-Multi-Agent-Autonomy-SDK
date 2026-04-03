@@ -41,6 +41,11 @@ members = [
     "crates/ml-model-versioning",
     "crates/event-driven",
     "crates/backup-restore",
+    "crates/agent-package-management",
+    "crates/container-integration",
+    "crates/security-configuration",
+    "crates/distributed-logging",
+    "crates/hardware-acceleration",
 ]
 resolver = "2"
 
