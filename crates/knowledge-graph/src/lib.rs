@@ -1,13 +1,16 @@
 //! Knowledge graph for representing and querying relationships between entities.
 //!
 //! This crate provides a graph-based knowledge representation system for agents
-//! to store and query relationships between entities.
+//! to store and query relationships between entities, with ontology support
+//! for semantic reasoning.
 //!
 //! # Features
 //! - Entity and relationship management
 //! - Property-based querying
 //! - Graph traversal and path finding
 //! - SPARQL-like query support (optional feature)
+//! - Ontology support with classes, properties, and reasoning
+//! - RDF/Turtle export for interoperability
 //!
 //! # Example
 //! ```
@@ -43,6 +46,7 @@
 pub mod error;
 pub mod graph;
 pub mod types;
+pub mod ontology;
 
 // Re-export commonly used types
 pub use error::{KnowledgeGraphError, Result};
@@ -51,6 +55,7 @@ pub use types::{
     Entity, EntityId, EntityQuery, Path, Relationship, RelationshipId, RelationshipQuery,
     TraversalDirection,
 };
+pub use ontology::{Ontology, Class, Property, PropertyType, OntologyError};
 
 /// Current version of the knowledge graph crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
