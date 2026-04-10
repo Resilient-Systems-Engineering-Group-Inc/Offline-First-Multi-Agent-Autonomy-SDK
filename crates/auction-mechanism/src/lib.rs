@@ -40,6 +40,7 @@
 pub mod engine;
 pub mod error;
 pub mod types;
+pub mod resource_auction;
 
 // Re-export commonly used types
 pub use engine::AuctionEngine;
@@ -47,6 +48,12 @@ pub use error::{AuctionError, Result};
 pub use types::{
     AuctionConfig, AuctionId, AuctionItem, AuctionResult, AuctionState, AuctionType, Bid,
     BidderId, BidderInfo,
+};
+pub use resource_auction::{
+    ResourceType, ResourceUnit, ResourceBundle, BidderConstraints,
+    CombinatorialAuction, CombinatorialAuctionResult,
+    DoubleAuction, DoubleAuctionResult, Trade,
+    utils,
 };
 
 /// Current version of the auction mechanism crate.

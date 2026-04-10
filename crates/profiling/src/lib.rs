@@ -5,12 +5,15 @@
 //! - **Distributed tracing**: OpenTelemetry‑compatible traces across agents.
 //! - **State snapshots**: Dump and compare CRDT state across the swarm.
 //! - **Debug endpoints**: HTTP server for live inspection.
+//! - **Performance analysis**: Latency tracking, throughput measurement, alerting.
+//! - **Distributed analysis**: Bottleneck detection, correlation analysis, anomaly detection.
 
 pub mod metrics;
 pub mod tracing;
 pub mod snapshot;
 pub mod debug_server;
 pub mod performance_analysis;
+pub mod distributed_analysis;
 
 /// Re‑export common types for convenience.
 pub use common::types::AgentId;
@@ -36,8 +39,21 @@ pub use performance_analysis::{
     AlertThreshold, Condition, Severity, Alert, LatencyStats,
 };
 
+/// Re‑export distributed analysis types.
+pub use distributed_analysis::{
+    Bottleneck, MetricCorrelation, PerformanceAnomaly,
+    BottleneckDetector, CorrelationAnalyzer, AnomalyDetector,
+    DistributedPerformanceAnalyzer, PerformanceReport,
+};
+
 /// Initialize performance analysis subsystem and return a shared analyzer.
 /// The analyzer will run background tasks for aggregation and alerting.
 pub async fn init_performance_analysis() -> std::sync::Arc<PerformanceAnalyzer> {
     performance_analysis::init_performance_analysis().await
+}
+
+/// Initialize distributed performance analysis subsystem.
+/// Returns a shared analyzer that can detect bottlenecks, correlations, and anomalies.
+pub async fn init_distributed_analysis() -> std::sync::Arc<DistributedPerformanceAnalyzer> {
+    std::sync::Arc::new(DistributedPerformanceAnalyzer::new())
 }

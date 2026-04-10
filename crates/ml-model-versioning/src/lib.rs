@@ -10,16 +10,18 @@
 //! - **Checksum validation**: SHA‑256 checksums for data integrity
 //! - **Storage backends**: In‑memory, file‑system, distributed KV (optional)
 //! - **Query system**: Filter and sort versions by metrics, framework, type, etc.
+//! - **A/B testing**: Experimentation framework for comparing model versions
 //! - **Integration**: Federated learning and RL planner integration (optional features)
 //! - **Statistics**: Registry‑level statistics and analytics
 //!
 //! # Architecture
 //!
-//! The system is built around three core abstractions:
+//! The system is built around four core abstractions:
 //!
 //! 1. **`ModelStorage` trait**: Abstract storage backend (in‑memory, file, database, distributed KV)
 //! 2. **`ModelVersioningManager`**: High‑level API for model/version operations
 //! 3. **`ModelMetadata` / `ModelVersion`**: Core data structures
+//! 4. **`ABTestingManager`**: A/B testing framework for comparing model versions
 //!
 //! # Examples
 //!
@@ -97,6 +99,7 @@
 //! }
 //! ```
 
+pub mod ab_testing;
 pub mod error;
 pub mod manager;
 pub mod storage;
@@ -109,6 +112,12 @@ pub use storage::{InMemoryStorage, ModelStorage};
 pub use types::{
     CreateVersionRequest, DataSplit, Dependency, MetricFilter, ModelBinary, ModelMetadata, ModelVersion,
     RegistryStats, SortField, TrainingDataInfo, UpdateVersionRequest, VersionQuery, VersionQueryResult,
+};
+
+// Re-export A/B testing types
+pub use ab_testing::{
+    ABExperimentConfig, ABTestingManager, ExperimentResult, Observation, StatisticalTest,
+    TrafficAllocationStrategy, Variant,
 };
 
 /// Current version of the ML model versioning crate.

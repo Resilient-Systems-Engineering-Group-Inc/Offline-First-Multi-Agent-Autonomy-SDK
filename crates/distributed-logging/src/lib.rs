@@ -22,6 +22,7 @@ pub mod logger;
 pub mod aggregator;
 pub mod sink;
 pub mod transport;
+pub mod analysis;
 
 #[cfg(feature = "compression")]
 pub mod compression;
@@ -37,11 +38,13 @@ pub use log_record::*;
 pub use logger::*;
 pub use aggregator::*;
 pub use sink::*;
+pub use analysis::*;
 
 /// Re‑export of common types for convenience.
 pub mod prelude {
     pub use super::{
         Logger, LogLevel, LogRecord, LogSink, Aggregator, DistributedLogger,
+        LogAnalyzer, LogAnalyzerConfig, LogStatistics, LogPattern, Anomaly, AnomalyRule,
     };
     #[cfg(feature = "compression")]
     pub use super::compression::*;
@@ -49,6 +52,7 @@ pub mod prelude {
     pub use super::mesh_integration::*;
     #[cfg(feature = "sync")]
     pub use super::sync_integration::*;
+    pub use super::analysis::utils;
 }
 
 /// Initializes the distributed logging subsystem.
