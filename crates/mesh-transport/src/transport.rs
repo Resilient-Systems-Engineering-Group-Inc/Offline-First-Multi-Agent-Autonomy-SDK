@@ -31,6 +31,23 @@ impl Default for BackendType {
     }
 }
 
+/// Cryptographic security mode for the mesh transport.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SecurityMode {
+    /// Classical cryptography (Ed25519 for signing, X25519 for key exchange).
+    Classical,
+    /// Post‑quantum cryptography (Dilithium/Falcon for signing, Kyber for key exchange).
+    /// Requires the `post‑quantum` feature.
+    #[cfg(feature = "post-quantum")]
+    PostQuantum,
+}
+
+impl Default for SecurityMode {
+    fn default() -> Self {
+        SecurityMode::Classical
+    }
+}
+
 /// Configuration for the mesh transport.
 #[derive(Debug, Clone)]
 pub struct MeshTransportConfig {
@@ -44,6 +61,8 @@ pub struct MeshTransportConfig {
     pub listen_addr: String,
     /// Backend type.
     pub backend_type: BackendType,
+    /// Cryptographic security mode.
+    pub security_mode: SecurityMode,
     /// WebRTC‑specific configuration (if backend_type is WebRtc).
     pub webrtc_config: Option<WebRtcConfig>,
     /// LoRa‑specific configuration (if backend_type is LoRa).
@@ -58,6 +77,7 @@ impl Default for MeshTransportConfig {
             use_mdns: true,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
             backend_type: BackendType::Libp2p,
+            security_mode: SecurityMode::Classical,
             webrtc_config: None,
             lora_config: None,
         }
@@ -87,6 +107,16 @@ impl MeshTransportConfig {
         Self {
             backend_type: BackendType::LoRa,
             lora_config: Some(config),
+            ..Default::default()
+        }
+    }
+
+    /// Create a configuration that uses post‑quantum cryptography.
+    /// Requires the `post‑quantum` feature.
+    #[cfg(feature = "post-quantum")]
+    pub fn post_quantum() -> Self {
+        Self {
+            security_mode: SecurityMode::PostQuantum,
             ..Default::default()
         }
     }

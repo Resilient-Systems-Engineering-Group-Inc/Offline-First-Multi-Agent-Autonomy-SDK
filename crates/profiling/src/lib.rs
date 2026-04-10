@@ -14,6 +14,7 @@ pub mod snapshot;
 pub mod debug_server;
 pub mod performance_analysis;
 pub mod distributed_analysis;
+pub mod visualization;
 
 /// Re‑export common types for convenience.
 pub use common::types::AgentId;
@@ -44,6 +45,12 @@ pub use distributed_analysis::{
     Bottleneck, MetricCorrelation, PerformanceAnomaly,
     BottleneckDetector, CorrelationAnalyzer, AnomalyDetector,
     DistributedPerformanceAnalyzer, PerformanceReport,
+};
+
+/// Re‑export visualization types.
+pub use visualization::{
+    Chart, ChartType, DataPoint, DataSeries, ChartConfig,
+    ChartGenerator, ReportGenerator, PerformanceReport as VisualizationPerformanceReport,
 };
 
 /// Initialize performance analysis subsystem and return a shared analyzer.

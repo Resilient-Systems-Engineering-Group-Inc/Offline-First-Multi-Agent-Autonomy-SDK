@@ -9,7 +9,10 @@
 //! - Property-based querying
 //! - Graph traversal and path finding
 //! - SPARQL-like query support (optional feature)
-//! - Ontology support with classes, properties, and reasoning
+//! - Ontology support with classes, properties, and inheritance
+//! - Rule‑based reasoning with forward‑chaining inference
+//! - Ontology‑based classification and consistency checking
+//! - Transitive relationship inference
 //! - RDF/Turtle export for interoperability
 //!
 //! # Example
@@ -42,11 +45,47 @@
 //! assert_eq!(results.len(), 1);
 //! ```
 //!
+//! # Reasoning Example
+//! ```
+//! use knowledge_graph::{KnowledgeGraph, Entity, Rule, Condition, Action, RuleEngine};
+//! use serde_json::json;
+//!
+//! let mut graph = KnowledgeGraph::new();
+//!
+//! // Add a person entity
+//! let mut person = Entity::new("Person");
+//! person.set_property("age", json!(17));
+//! graph.add_entity(person.clone()).unwrap();
+//!
+//! // Create a rule: if age < 18, mark as minor
+//! let rule = Rule::new(
+//!     "minor-rule",
+//!     "Mark persons under 18 as minors",
+//!     Condition::And(vec![
+//!         Condition::EntityType("Person".to_string()),
+//!         Condition::PropertyLess("age".to_string(), 18.0),
+//!     ]),
+//!     Action::SetProperty(person.id.clone(), "status".to_string(), json!("minor")),
+//! );
+//!
+//! // Apply rule engine
+//! let mut engine = RuleEngine::new();
+//! engine.add_rule(rule);
+//! let actions = engine.infer(&mut graph).unwrap();
+//!
+//! assert_eq!(actions.len(), 1);
+//! assert_eq!(
+//!     graph.get_entity(&person.id).unwrap().get_property("status"),
+//!     Some(&json!("minor"))
+//! );
+//! ```
+//!
 
 pub mod error;
 pub mod graph;
 pub mod types;
 pub mod ontology;
+pub mod reasoning;
 
 // Re-export commonly used types
 pub use error::{KnowledgeGraphError, Result};
@@ -56,6 +95,9 @@ pub use types::{
     TraversalDirection,
 };
 pub use ontology::{Ontology, Class, Property, PropertyType, OntologyError};
+pub use reasoning::{
+    ReasoningError, Condition, Action, Rule, RuleEngine, OntologyReasoner, QueryEngine, QueryResult,
+};
 
 /// Current version of the knowledge graph crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

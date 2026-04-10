@@ -8,11 +8,16 @@ pub mod detection;
 pub mod recovery;
 pub mod error;
 pub mod manager;
+pub mod advanced_recovery;
 
 pub use detection::PartitionDetector;
-pub use recovery::PartitionRecovery;
+pub use recovery::{PartitionRecovery, CrdtAutoRecovery};
 pub use manager::PartitionRecoveryManager;
 pub use error::PartitionRecoveryError;
+pub use advanced_recovery::{
+    AdvancedRecoveryEngine, AdvancedRecoveryConfig, ConflictResolution,
+    AgentPriority, StateSnapshot, Conflict, ConflictSeverity, ResolutionResult,
+};
 
 /// Re‑export of common types.
 pub use common::types::{AgentId, VectorClock};
