@@ -9,6 +9,7 @@ pub mod scheduler;
 pub mod executor;
 pub mod coordinator;
 pub mod monitor;
+pub mod engine;
 
 pub use error::WorkflowError;
 pub use model::{Workflow, Task, TaskStatus, WorkflowStatus};
@@ -16,6 +17,7 @@ pub use scheduler::WorkflowScheduler;
 pub use executor::TaskExecutor;
 pub use coordinator::DistributedCoordinator;
 pub use monitor::WorkflowMonitor;
+pub use engine::{WorkflowEngine, WorkflowInstanceHandle};
 
 /// Re‑export of common types.
 pub mod prelude {
@@ -29,6 +31,8 @@ pub mod prelude {
         TaskExecutor,
         DistributedCoordinator,
         WorkflowMonitor,
+        WorkflowEngine,
+        WorkflowInstanceHandle,
     };
 }
 

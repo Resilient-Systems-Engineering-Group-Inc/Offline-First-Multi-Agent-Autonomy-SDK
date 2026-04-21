@@ -1,4 +1,7 @@
 //! Cryptographic security for mesh transport (signing, verification, encryption).
+//!
+//! Supports both classical cryptography (Ed25519, X25519, ChaCha20-Poly1305)
+//! and post-quantum cryptography (Kyber, Dilithium, Falcon) when enabled.
 
 use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
 use rand_core::OsRng;
@@ -9,6 +12,17 @@ use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use chacha20poly1305::aead::{Aead, NewAead};
 use x25519_dalek::{PublicKey, StaticSecret, SharedSecret};
 use std::convert::TryInto;
+
+#[cfg(feature = "post-quantum")]
+pub mod post_quantum;
+#[cfg(feature = "post-quantum")]
+pub use post_quantum::{
+    KyberKeyPair,
+    DilithiumKeyPair,
+    DilithiumSignature,
+    FalconKeyPair,
+    HybridSecurityManager,
+};
 
 /// Errors that can occur during security operations.
 #[derive(Error, Debug)]

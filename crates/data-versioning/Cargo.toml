@@ -18,6 +18,7 @@ futures = "0.3"
 bytes = "1.5"
 lazy_static = "1.4"
 tracing = "0.1"
+uuid = { workspace = true }
 
 # Internal dependencies
 common = { path = "../common", version = "0.3.0" }

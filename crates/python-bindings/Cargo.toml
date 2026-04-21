@@ -1,0 +1,30 @@
+[package]
+name = "python-bindings"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for the Offline-First Multi-Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+authors = ["Your Name <you@example.com>"]
+
+[lib]
+name = "sdk"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+state-sync = { path = "../state-sync", version = "0.3.0" }
+distributed-planner = { path = "../distributed-planner", version = "0.3.0" }
+workflow-orchestration = { path = "../workflow-orchestration", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.3.0" }
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]

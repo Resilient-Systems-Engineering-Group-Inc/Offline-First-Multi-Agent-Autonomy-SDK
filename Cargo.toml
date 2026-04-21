@@ -54,6 +54,7 @@ members = [
     "crates/metadata-management",
     "crates/abac-integration",
     "crates/secrets-management",
+    "crates/load-balancer",
 ]
 resolver = "2"
 

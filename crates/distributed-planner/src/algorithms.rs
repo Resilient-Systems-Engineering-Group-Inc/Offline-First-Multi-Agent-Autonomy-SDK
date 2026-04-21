@@ -5,6 +5,19 @@ use common::types::Capability;
 use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 
+// Re-export advanced algorithms
+pub mod advanced;
+pub use advanced::{
+    MultiObjectivePlanner,
+    MultiObjectiveWeights,
+    RLPlanner,
+    DynamicLoadBalancer,
+    HybridPlanner,
+    HybridStrategy,
+    StrategyCondition,
+    PlannerContext,
+};
+
 /// Trait for a planning algorithm that decides task assignments.
 #[async_trait::async_trait]
 pub trait PlanningAlgorithm: Send + Sync {

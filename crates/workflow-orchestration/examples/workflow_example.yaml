@@ -1,0 +1,153 @@
+workflow_id: warehouse_exploration
+name: Warehouse Exploration
+description: Collaborative exploration and mapping of warehouse environment
+version: 1.0.0
+
+tasks:
+  # Initialize all robots
+  - id: initialize
+    name: Initialize System
+    type: setup
+    description: "Initialize all agents and check system status"
+    timeout_secs: 60
+    retries: 3
+    retry_delay_ms: 5000
+    required_capabilities: [system_check]
+    parameters:
+      check_battery: "true"
+      check_network: "true"
+      min_battery_threshold: "20"
+
+  # Parallel exploration of different zones
+  - id: explore_north
+    name: Explore North Zone
+    type: action
+    description: "Map the northern section of warehouse"
+    dependencies: [initialize]
+    timeout_secs: 300
+    retries: 2
+    required_capabilities: [navigation, lidar, camera]
+    parameters:
+      zone: "north"
+      resolution: "0.05"
+
+  - id: explore_south
+    name: Explore South Zone
+    type: action
+    description: "Map the southern section of warehouse"
+    dependencies: [initialize]
+    timeout_secs: 300
+    retries: 2
+    required_capabilities: [navigation, lidar, camera]
+    parameters:
+      zone: "south"
+      resolution: "0.05"
+
+  - id: explore_east
+    name: Explore East Zone
+    type: action
+    description: "Map the eastern section of warehouse"
+    dependencies: [initialize]
+    timeout_secs: 300
+    retries: 2
+    required_capabilities: [navigation, lidar, camera]
+    parameters:
+      zone: "east"
+      resolution: "0.05"
+
+  - id: explore_west
+    name: Explore West Zone
+    type: action
+    description: "Map the western section of warehouse"
+    dependencies: [initialize]
+    timeout_secs: 300
+    retries: 2
+    required_capabilities: [navigation, lidar, camera]
+    parameters:
+      zone: "west"
+      resolution: "0.05"
+
+  # Join all exploration tasks
+  - id: join_exploration
+    name: Join Exploration Results
+    type: join
+    description: "Wait for all zone exploration to complete"
+    dependencies: [explore_north, explore_south, explore_east, explore_west]
+    timeout_secs: 60
+
+  # Merge maps from all zones
+  - id: merge_maps
+    name: Merge Zone Maps
+    type: action
+    description: "Combine individual zone maps into complete warehouse map"
+    dependencies: [join_exploration]
+    timeout_secs: 120
+    retries: 1
+    required_capabilities: [computation, mapping]
+    parameters:
+      alignment_method: "icp"
+      optimization: "g2o"
+
+  # Identify obstacles and hazards
+  - id: analyze_obstacles
+    name: Analyze Obstacles
+    type: action
+    description: "Detect and classify obstacles in the warehouse"
+    dependencies: [merge_maps]
+    timeout_secs: 180
+    required_capabilities: [vision, computation]
+    parameters:
+      obstacle_types: [static, dynamic, hazardous]
+
+  # Plan optimal paths
+  - id: plan_paths
+    name: Plan Navigation Paths
+    type: action
+    description: "Generate optimal paths for robot navigation"
+    dependencies: [merge_maps, analyze_obstacles]
+    timeout_secs: 120
+    required_capabilities: [planning, computation]
+    parameters:
+      algorithm: "astar"
+      cost_function: "distance_energy"
+
+  # Validate workflow completion
+  - id: validation
+    name: Validate Results
+    type: condition
+    description: "Verify map quality and completeness"
+    dependencies: [plan_paths]
+    timeout_secs: 60
+    required_capabilities: [validation]
+    parameters:
+      min_coverage: "95"
+      max_uncertainty: "0.1"
+
+  # Final cleanup
+  - id: cleanup
+    name: System Cleanup
+    type: teardown
+    description: "Clean up resources and save results"
+    dependencies: [validation]
+    timeout_secs: 60
+    required_capabilities: [system_management]
+    parameters:
+      save_map: "true"
+      save_paths: "true"
+      log_results: "true"
+
+# Workflow-level settings
+on_failure: rollback
+timeout_secs: 3600  # 1 hour total timeout
+
+tags:
+  - exploration
+  - mapping
+  - warehouse
+  - multi-robot
+
+metadata:
+  priority: "high"
+  location: "warehouse_main"
+  team: "autonomy_team"
+  estimated_cost: "150"

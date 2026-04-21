@@ -1,0 +1,34 @@
+[package]
+name = "state-sync-fuzz"
+version = "0.0.1"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3", features = ["derive"] }
+state-sync = { path = ".." }
+common = { path = "../../common" }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+
+[[bin]]
+name = "crdt_merge_fuzzer"
+path = "fuzz_targets/crdt_merge_fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "delta_serialization_fuzzer"
+path = "fuzz_targets/delta_serialization_fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "sync_protocol_fuzzer"
+path = "fuzz_targets/sync_protocol_fuzzer.rs"
+test = false
+doc = false

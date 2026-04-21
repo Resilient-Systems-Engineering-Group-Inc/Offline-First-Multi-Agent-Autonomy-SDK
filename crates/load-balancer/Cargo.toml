@@ -1,0 +1,36 @@
+[package]
+name = "load-balancer"
+version = "0.1.0"
+edition = "2021"
+authors = ["Resilient Systems Engineering Group, Inc"]
+description = "Load balancing for multi-agent systems in the Offline‑First Multi‑Agent Autonomy SDK"
+license = "BSD-3-Clause"
+repository = "https://github.com/your-org/Offline-First-Multi-Agent-Autonomy-SDK"
+readme = "README.md"
+
+[features]
+default = ["metrics", "adaptive"]
+metrics = []
+adaptive = ["rand"]
+predictive = ["serde", "chrono"]
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+rand = { version = "0.8", optional = true }
+serde_json = { workspace = true }
+chrono = { workspace = true, optional = true }
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+agent-core = { path = "../agent-core", version = "0.3.0" }
+resource-monitor = { path = "../resource-monitor", version = "0.3.0" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true }

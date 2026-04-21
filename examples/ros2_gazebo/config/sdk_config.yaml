@@ -1,0 +1,44 @@
+# SDK Configuration for ROS2 Integration
+
+sdk:
+  # Agent identification
+  agent_id: "agent-1"
+  
+  # ROS2 settings
+  ros_domain_id: 42
+  robot_namespace: "/robot_1"
+  
+  # Mesh transport configuration
+  transport:
+    enable_mdns: true
+    enable_websocket: false
+    websocket_port: 0  # Auto-assign
+    tcp_port: 8080
+    
+  # State sync configuration
+  state_sync:
+    sync_interval_ms: 100
+    max_delta_size: 1000
+    compression_enabled: true
+    
+  # Planning configuration
+  planning:
+    algorithm: "multi_objective"  # round_robin, auction, resource_aware, multi_objective
+    planning_interval_ms: 500
+    
+  # Resource monitoring
+  monitoring:
+    battery_threshold_low: 20
+    battery_threshold_critical: 10
+    enable_alerts: true
+    
+  # Metrics
+  metrics:
+    enabled: true
+    port: 9090
+    endpoint: "/metrics"
+    
+  # Logging
+  logging:
+    level: "info"  # debug, info, warn, error
+    format: "json"

@@ -5,6 +5,7 @@
 
 pub mod algorithms;
 pub mod sync;
+pub mod lifecycle;
 
 use common::types::{AgentId, VectorClock, Capability};
 use mesh_transport::{MeshTransport, MeshTransportConfig};
@@ -14,6 +15,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::RwLock;
 use anyhow::Result;
+
+pub use lifecycle::{
+    TaskLifecycleManager,
+    TaskState,
+    LifecycleEvent,
+    RetryDecision,
+    LifecycleError,
+};
 
 /// A task that can be assigned to an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]

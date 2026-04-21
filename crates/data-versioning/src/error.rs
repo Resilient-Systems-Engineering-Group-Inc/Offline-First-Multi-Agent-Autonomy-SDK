@@ -33,6 +33,10 @@ pub enum VersioningError {
     #[error("Storage backend error: {0}")]
     Storage(String),
 
+    /// Lineage tracking error.
+    #[error("Lineage error: {0}")]
+    LineageError(String),
+
     /// Other errors.
     #[error("Other error: {0}")]
     Other(String),

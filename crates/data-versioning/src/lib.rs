@@ -1,12 +1,15 @@
-//! Data versioning with snapshots and rollback for offline‑first multi‑agent systems.
+//! Data versioning with snapshots, rollback, and lineage tracking for offline‑first multi‑agent systems.
 //!
-//! This crate provides version tracking, snapshot creation, and rollback capabilities
-//! for distributed state (e.g., CRDT maps). It integrates with the SDK's state‑sync
-//! and can be used to maintain a history of changes, enabling audit trails and
-//! disaster recovery.
+//! This crate provides:
+//! - Version tracking and snapshot creation for distributed state (e.g., CRDT maps)
+//! - Rollback capabilities for disaster recovery
+//! - Comprehensive data lineage tracking with provenance information
+//! - Integration with the SDK's state‑sync system
+//! - Audit trails and compliance tracking
 //!
 //! # Quick Start
 //!
+//! ## Basic Versioning
 //! ```no_run
 //! use data_versioning::{VersionManager, InMemoryStorage, VersionedCrdtMap};
 //! use state_sync::crdt_map::CrdtMap;
@@ -29,13 +32,50 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Lineage Tracking
+//! ```no_run
+//! use data_versioning::lineage::{LineageTracker, DataOrigin, DataReference, LineageBuilder};
+//! use data_versioning::version::Version;
+//! use common::types::AgentId;
+//!
+//! fn example() -> Result<(), Box<dyn std::error::Error>> {
+//!     let mut tracker = LineageTracker::new();
+//!
+//!     let data_ref = DataReference {
+//!         data_id: "sensor_data".to_string(),
+//!         version: Version::new(1, AgentId::from_u128(123)),
+//!         location: None,
+//!     };
+//!
+//!     let origin = DataOrigin::Sensor {
+//!         sensor_id: "temp_sensor_1".to_string(),
+//!         timestamp: 1000,
+//!         location: Some("room_a".to_string()),
+//!     };
+//!
+//!     let lineage = LineageBuilder::new(data_ref.clone(), origin)
+//!         .add_quality_metric("accuracy".to_string(), 0.95)
+//!         .build();
+//!
+//!     tracker.register_lineage(lineage)?;
+//!
+//!     // Query provenance
+//!     let provenance = tracker.get_provenance(&data_ref);
+//!     println!("Data origin: {:?}", provenance.unwrap().origin);
+//!
+//!     Ok(())
+//! }
+//! ```
 
 pub mod error;
 pub mod integration;
+pub mod lineage;
 pub mod manager;
 pub mod version;
 
 pub use error::*;
 pub use integration::*;
+pub use lineage::*;
 pub use manager::*;
 pub use version::*;

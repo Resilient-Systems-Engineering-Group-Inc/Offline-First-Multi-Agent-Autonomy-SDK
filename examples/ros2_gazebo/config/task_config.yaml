@@ -1,0 +1,62 @@
+# Task Generator Configuration
+
+task_generator:
+  # Scenario selection
+  scenario: "object_transport"
+  
+  # Task generation settings
+  generation:
+    tasks_per_minute: 5
+    max_concurrent_tasks: 10
+    random_seed: 42
+    
+  # Scenario-specific parameters
+  
+  # Object Transport Scenario
+  object_transport:
+    pickup_zones: ["zone_a", "zone_b", "zone_c"]
+    dropoff_zones: ["zone_x", "zone_y", "zone_z"]
+    package_types: ["small", "medium", "large"]
+    difficulty_levels: ["easy", "medium", "hard"]
+    
+  # Collaborative Mapping Scenario
+  collaborative_mapping:
+    map_zones: ["north", "south", "east", "west", "center"]
+    update_interval_ms: 1000
+    coverage_threshold: 0.9
+    
+  # Search and Rescue Scenario
+  search_rescue:
+    search_area_size: 100
+    target_count: 5
+    detection_radius: 5.0
+    response_time_limit_s: 60
+    
+  # Formation Control Scenario
+  formation:
+    formation_type: "triangle"  # triangle, line, wedge, custom
+    maintain_distance: 2.0
+    reconfigure_on_obstacle: true
+    
+  # Task templates
+  templates:
+    - name: "navigate_to_point"
+      priority: 100
+      duration_secs: 30
+      required_capabilities: ["navigation"]
+      
+    - name: "scan_area"
+      priority: 150
+      duration_secs: 60
+      required_capabilities: ["navigation", "lidar"]
+      
+    - name: "transport_object"
+      priority: 200
+      duration_secs: 120
+      required_capabilities: ["navigation", "gripper"]
+      dependencies: ["navigate_to_point"]
+      
+    - name: "emergency_response"
+      priority: 255
+      duration_secs: 30
+      required_capabilities: ["navigation"]

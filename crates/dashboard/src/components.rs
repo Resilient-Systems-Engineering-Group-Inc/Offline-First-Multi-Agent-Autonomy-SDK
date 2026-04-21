@@ -1,5 +1,13 @@
 //! Yew components for the dashboard.
 
+mod network_visualizer;
+mod task_details;
+mod metrics_charts;
+
+pub use network_visualizer::NetworkVisualizer;
+pub use task_details::TaskDetailsPanel;
+pub use metrics_charts::MetricsCharts;
+
 use crate::models::{Agent, Metrics, Task};
 use crate::services::MockService;
 use yew::prelude::*;

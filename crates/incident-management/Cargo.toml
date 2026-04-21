@@ -21,6 +21,9 @@ uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "5.5"
 regex = "1.10"
+reqwest = { version = "0.11", features = ["json"], optional = true }
+http = "0.2"
+bytes = "1.0"
 
 # Internal dependencies
 common = { path = "../common", version = "0.3.0" }
@@ -35,6 +38,7 @@ transport = ["mesh-transport"]
 distributed = ["state-sync", "transport"]
 auditing = ["audit"]
 monitoring = ["monitoring-integration"]
+external = ["reqwest"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
