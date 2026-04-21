@@ -1,0 +1,25 @@
+[package]
+name = "database"
+version = "0.1.0"
+edition = "2021"
+description = "Database persistence layer for the Offline-First Multi-Agent Autonomy SDK"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "sqlite", "chrono", "uuid", "json"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+async-trait = "0.1"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+workflow-orchestration = { path = "../workflow-orchestration", version = "0.1.0" }
+
+[dev-dependencies]
+tokio-test = "0.4"

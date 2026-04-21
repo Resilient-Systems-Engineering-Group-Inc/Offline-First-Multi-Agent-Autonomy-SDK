@@ -1,0 +1,28 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+description = "End-to-end integration tests for the SDK"
+license = "MIT OR Apache-2.0"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.6", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+wiremock = "0.5"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.3.0" }
+state-sync = { path = "../state-sync", version = "0.3.0" }
+distributed-planner = { path = "../distributed-planner", version = "0.3.0" }
+workflow-orchestration = { path = "../workflow-orchestration", version = "0.1.0" }
+dashboard = { path = "../dashboard", version = "0.1.0" }
+database = { path = "../database", version = "0.1.0" }
+auth = { path = "../auth", version = "0.1.0" }

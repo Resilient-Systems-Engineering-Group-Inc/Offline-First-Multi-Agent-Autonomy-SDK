@@ -1,0 +1,167 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdk-dashboard
+  labels:
+    app: sdk-dashboard
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sdk-dashboard
+  template:
+    metadata:
+      labels:
+        app: sdk-dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: sdk-dashboard:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: sdk-secrets
+              key: database-url
+        - name: AUTH_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: sdk-secrets
+              key: jwt-secret
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: sdk-data-pvc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sdk-dashboard
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdk-dashboard
+  labels:
+    app: sdk-dashboard
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: sdk-dashboard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sdk-data-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sdk-secrets
+type: Opaque
+stringData:
+  database-url: "postgres://sdk_user:sdk_password@sdk-db:5432/sdk_db"
+  jwt-secret: "change-this-in-production"
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sdk-database
+spec:
+  serviceName: sdk-database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdk-database
+  template:
+    metadata:
+      labels:
+        app: sdk-database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: "sdk_db"
+        - name: POSTGRES_USER
+          value: "sdk_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sdk-secrets
+              key: db-password
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: sdk-db-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdk-database
+spec:
+  clusterIP: None
+  selector:
+    app: sdk-database
+  ports:
+  - port: 5432
+    name: postgres

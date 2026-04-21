@@ -1,0 +1,57 @@
+# Multi-stage build for dashboard API
+FROM rust:1.75 as builder
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Cargo.toml files for dependency caching
+COPY Cargo.toml Cargo.lock ./
+COPY crates/dashboard/Cargo.toml ./crates/dashboard/
+COPY crates/auth/Cargo.toml ./crates/auth/
+COPY crates/database/Cargo.toml ./crates/database/
+COPY crates/common/Cargo.toml ./crates/common/
+COPY crates/mesh-transport/Cargo.toml ./crates/mesh-transport/
+COPY crates/state-sync/Cargo.toml ./crates/state-sync/
+COPY crates/distributed-planner/Cargo.toml ./crates/distributed-planner/
+COPY crates/workflow-orchestration/Cargo.toml ./crates/workest-orchestration/
+
+# Build dependencies
+RUN cargo build --release --package dashboard --no-default-features
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN cargo build --release --package dashboard --no-default-features
+
+# Runtime image
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary
+COPY --from=builder /app/target/release/dashboard /usr/local/bin/
+
+# Create data directory
+RUN mkdir -p /data
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Run the application
+CMD ["dashboard"]

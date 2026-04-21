@@ -1,0 +1,25 @@
+[package]
+name = "ml-planner"
+version = "0.1.0"
+edition = "2021"
+description = "ML-based task planning with reinforcement learning"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+torch = { version = "0.11", features = ["cuda"] }
+ndarray = "0.15"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
+thiserror = "1.0"
+
+# Internal dependencies
+distributed-planner = { path = "../distributed-planner", version = "0.3.0" }
+common = { path = "../common", version = "0.3.0" }
+
+[dev-dependencies]
+tempfile = "3.8"

@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # Dashboard API Server
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=sqlite:/data/sdk.db
+      - AUTH_JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - RUST_LOG=info
+    volumes:
+      - dashboard-data:/data
+    depends_on:
+      - database
+    networks:
+      - sdk-network
+    restart: unless-stopped
+
+  # PostgreSQL Database (optional, for distributed deployments)
+  database:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sdk_db
+      - POSTGRES_USER=sdk_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-sdk-password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sdk-network
+    restart: unless-stopped
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - sdk-network
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - sdk-network
+    restart: unless-stopped
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sdk-network
+    restart: unless-stopped
+
+  # ROS2 Simulation (optional)
+  ros2_sim:
+    build:
+      context: .
+      dockerfile: Dockerfile.ros2
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=42
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./examples/ros2_gazebo:/workspace/ros2_gazebo
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    privileged: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  dashboard-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+  redis-data:
+
+networks:
+  sdk-network:
+    driver: bridge
