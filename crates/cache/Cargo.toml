@@ -1,0 +1,23 @@
+[package]
+name = "cache"
+version = "0.1.0"
+edition = "2021"
+description = "Advanced caching for the Multi-Agent SDK"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+redis = { version = "0.24", features = ["tokio-comp", "cluster"] }
+dashmap = "5.5"
+lru = "0.12"
+metrics = "0.21"
+
+# Internal dependencies
+common = { path = "../common", version = "0.3.0" }
