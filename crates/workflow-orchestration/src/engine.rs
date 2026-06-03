@@ -7,17 +7,18 @@
 //! - Error handling and recovery
 //! - Rollback support
 
+use crate::error::{WorkflowError, Result};
 use crate::model::{
-    Workflow, WorkflowInstance, WorkflowStatus, WorkflowResult, WorkflowError, WorkflowFailureStrategy,
-    Task, TaskStatus, TaskState,
+    Workflow, WorkflowInstance, WorkflowStatus, WorkflowResult, WorkflowFailureStrategy,
+    Task, TaskStatus,
 };
 use crate::scheduler::TaskScheduler;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::{Mutex, RwLock, Notify};
 use tokio::time::{Duration, sleep};
-use tracing::{info, warn, error, debug};
-use uuid::Uuid;
+use tracing::{info, error, debug};
 
 /// Workflow execution engine.
 pub struct WorkflowEngine {
@@ -25,6 +26,10 @@ pub struct WorkflowEngine {
     instances: RwLock<HashMap<String, WorkflowInstance>>,
     scheduler: Arc<Mutex<TaskScheduler>>,
     max_concurrent: usize,
+    /// Notifier for workflow instance state changes (wakes up polling loops).
+    instance_notifier: Arc<Notify>,
+    /// Global shutdown flag.
+    shutdown: Arc<AtomicBool>,
 }
 
 impl WorkflowEngine {
@@ -34,6 +39,8 @@ impl WorkflowEngine {
             instances: RwLock::new(HashMap::new()),
             scheduler: Arc::new(Mutex::new(TaskScheduler::new())),
             max_concurrent,
+            instance_notifier: Arc::new(Notify::new()),
+            shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -41,7 +48,7 @@ impl WorkflowEngine {
     pub async fn register_workflow(&self, workflow: Workflow) -> Result<String, WorkflowError> {
         workflow.validate()?;
         
-        let id = workflow.id.clone();
+        let id = workflow.id.to_string();
         info!("Registering workflow: {} ({})", workflow.name, id);
         
         let mut workflows = self.workflows.write().await;
@@ -75,7 +82,7 @@ impl WorkflowEngine {
         parameters: HashMap<String, String>,
     ) -> Result<WorkflowInstanceHandle, WorkflowError> {
         let workflow = self.get_workflow(workflow_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.to_string()))?;
+            .ok_or_else(|| WorkflowError::NotFound(workflow_id.to_string()))?;
 
         let instance = WorkflowInstance::new(&workflow, parameters);
         let instance_id = instance.instance_id.clone();
@@ -105,18 +112,28 @@ impl WorkflowEngine {
         let workflow_id = {
             let instances = self.instances.read().await;
             let instance = instances.get(instance_id)
-                .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
-            instance.workflow_id.clone()
+                .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
+            instance.workflow_id
         };
 
-        let workflow = self.get_workflow(&workflow_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(workflow_id.clone()))?;
+        let workflow = self.get_workflow(&workflow_id.to_string())
+            .ok_or_else(|| WorkflowError::NotFound(workflow_id.to_string()))?;
 
         loop {
+            // Check for global shutdown
+            if self.shutdown.load(Ordering::SeqCst) {
+                info!("Workflow engine shutting down, cancelling instance {}", instance_id);
+                let mut instances = self.instances.write().await;
+                if let Some(instance) = instances.get_mut(instance_id) {
+                    instance.status = WorkflowStatus::Cancelled;
+                }
+                return Ok(());
+            }
+
             let should_continue = {
                 let mut instances = self.instances.write().await;
                 let instance = instances.get_mut(instance_id)
-                    .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
+                    .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
 
                 if instance.is_complete() {
                     false
@@ -140,7 +157,7 @@ impl WorkflowEngine {
                         let handle = tokio::spawn(async move {
                             Self::execute_task(&task_clone, &instance_id_clone).await
                         });
-                        task_handles.push((task.id.clone(), handle));
+                        task_handles.push((task.id, handle));
                     }
 
                     // Wait for all spawned tasks
@@ -150,6 +167,8 @@ impl WorkflowEngine {
                                 let mut instances = self.instances.write().await;
                                 if let Some(instance) = instances.get_mut(instance_id) {
                                     let _ = instance.mark_task_completed(&task_id, output);
+                                    // Notify any waiters (e.g., await_completion)
+                                    self.instance_notifier.notify_waiters();
                                 }
                             }
                             Ok(Err(e)) => {
@@ -162,17 +181,20 @@ impl WorkflowEngine {
                                         WorkflowFailureStrategy::Fail => {
                                             instance.status = WorkflowStatus::Failed;
                                             instance.error = Some(e.to_string());
-                                            return Err(WorkflowError::ExecutionFailed(e.to_string()));
+                                            self.instance_notifier.notify_waiters();
+                                            return Err(WorkflowError::TaskExecution(e.to_string()));
                                         }
                                         WorkflowFailureStrategy::Continue => {
                                             // Continue with other tasks
                                         }
                                         WorkflowFailureStrategy::Rollback => {
                                             self.rollback_instance(instance_id).await?;
+                                            self.instance_notifier.notify_waiters();
                                             return Ok(());
                                         }
                                         WorkflowFailureStrategy::Pause => {
                                             instance.status = WorkflowStatus::Paused;
+                                            self.instance_notifier.notify_waiters();
                                             return Ok(());
                                         }
                                     }
@@ -200,6 +222,7 @@ impl WorkflowEngine {
                                 .unwrap()
                                 .as_secs(),
                         );
+                        self.instance_notifier.notify_waiters();
                         false
                     } else {
                         true
@@ -211,7 +234,16 @@ impl WorkflowEngine {
                 break;
             }
 
-            sleep(Duration::from_millis(100)).await;
+            // Wait for notification instead of busy-loop polling
+            // Use a timeout to periodically check for shutdown signals
+            tokio::select! {
+                _ = self.instance_notifier.notified() => {
+                    // A task completed or state changed, re-check
+                }
+                _ = sleep(Duration::from_millis(500)) => {
+                    // Timeout to prevent starvation if notification is missed
+                }
+            }
         }
 
         Ok(())
@@ -254,7 +286,7 @@ impl WorkflowEngine {
 
         let mut instances = self.instances.write().await;
         let instance = instances.get_mut(instance_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
+            .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
 
         instance.status = WorkflowStatus::Rollback;
 
@@ -262,7 +294,7 @@ impl WorkflowEngine {
         let completed_tasks: Vec<_> = instance.task_states
             .iter()
             .filter(|(_, state)| state.status == TaskStatus::Completed)
-            .map(|(id, _)| id.clone())
+            .map(|(id, _)| *id)
             .collect();
 
         for task_id in completed_tasks.into_iter().rev() {
@@ -282,13 +314,16 @@ impl WorkflowEngine {
     pub async fn pause_workflow(&self, instance_id: &str) -> Result<(), WorkflowError> {
         let mut instances = self.instances.write().await;
         let instance = instances.get_mut(instance_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
+            .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
 
         if instance.status == WorkflowStatus::Running {
             instance.status = WorkflowStatus::Paused;
+            self.instance_notifier.notify_waiters();
             Ok(())
         } else {
-            Err(WorkflowError::InvalidStateTransition)
+            Err(WorkflowError::Other(format!(
+                "Cannot pause workflow in state {:?}", instance.status
+            )))
         }
     }
 
@@ -296,13 +331,16 @@ impl WorkflowEngine {
     pub async fn resume_workflow(&self, instance_id: &str) -> Result<(), WorkflowError> {
         let mut instances = self.instances.write().await;
         let instance = instances.get_mut(instance_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
+            .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
 
         if instance.status == WorkflowStatus::Paused {
             instance.status = WorkflowStatus::Running;
+            self.instance_notifier.notify_waiters();
             Ok(())
         } else {
-            Err(WorkflowError::InvalidStateTransition)
+            Err(WorkflowError::Other(format!(
+                "Cannot resume workflow in state {:?}", instance.status
+            )))
         }
     }
 
@@ -310,13 +348,16 @@ impl WorkflowEngine {
     pub async fn cancel_workflow(&self, instance_id: &str) -> Result<(), WorkflowError> {
         let mut instances = self.instances.write().await;
         let instance = instances.get_mut(instance_id)
-            .ok_or_else(|| WorkflowError::WorkflowNotFound(instance_id.to_string()))?;
+            .ok_or_else(|| WorkflowError::NotFound(instance_id.to_string()))?;
 
         if instance.status == WorkflowStatus::Running || instance.status == WorkflowStatus::Paused {
             instance.status = WorkflowStatus::Cancelled;
+            self.instance_notifier.notify_waiters();
             Ok(())
         } else {
-            Err(WorkflowError::InvalidStateTransition)
+            Err(WorkflowError::Other(format!(
+                "Cannot cancel workflow in state {:?}", instance.status
+            )))
         }
     }
 
@@ -343,6 +384,13 @@ impl WorkflowEngine {
         let mut instances = self.instances.write().await;
         instances.remove(instance_id).is_some()
     }
+
+    /// Shutdown the engine gracefully, cancelling all running instances.
+    pub async fn shutdown(&self) {
+        info!("Shutting down workflow engine");
+        self.shutdown.store(true, Ordering::SeqCst);
+        self.instance_notifier.notify_waiters();
+    }
 }
 
 impl Clone for WorkflowEngine {
@@ -352,6 +400,8 @@ impl Clone for WorkflowEngine {
             instances: self.instances.clone(),
             scheduler: self.scheduler.clone(),
             max_concurrent: self.max_concurrent,
+            instance_notifier: self.instance_notifier.clone(),
+            shutdown: self.shutdown.clone(),
         }
     }
 }
@@ -368,18 +418,27 @@ impl WorkflowInstanceHandle {
         &self.instance_id
     }
 
-    /// Wait for workflow completion.
+    /// Wait for workflow completion using notification-based waiting.
     pub async fn await_completion(&self) -> Result<WorkflowResult, WorkflowError> {
         loop {
             let instance = self.engine.get_instance(&self.instance_id).await
-                .ok_or_else(|| WorkflowError::WorkflowNotFound(self.instance_id.clone()))?;
+                .ok_or_else(|| WorkflowError::NotFound(self.instance_id.clone()))?;
 
             if instance.is_complete() {
                 let result = WorkflowResult::from_instance(&instance);
                 return Ok(result);
             }
 
-            sleep(Duration::from_millis(100)).await;
+            // Wait for notification instead of busy-loop polling
+            // Use a notified() future that we can select with a timeout
+            tokio::select! {
+                _ = self.engine.instance_notifier.notified() => {
+                    // State changed, re-check
+                }
+                _ = sleep(Duration::from_millis(500)) => {
+                    // Timeout to prevent starvation
+                }
+            }
         }
     }
 
@@ -423,59 +482,114 @@ mod tests {
     async fn test_workflow_execution() {
         let engine = WorkflowEngine::new(4);
 
-        let workflow = Workflow {
-            id: "test-wf".to_string(),
-            name: "Test Workflow".to_string(),
-            description: None,
-            version: "1.0".to_string(),
-            tasks: vec![
-                Task {
-                    id: Uuid::new_v4(),
-                    name: "Task 1".to_string(),
-                    task_type: "setup".to_string(),
-                    parameters: serde_json::json!({}),
-                    required_capabilities: vec![],
-                    estimated_duration_secs: 1,
-                    priority: 0,
-                    deadline: None,
-                    status: TaskStatus::Pending,
-                    result: None,
-                    error: None,
-                    started_at: None,
-                    finished_at: None,
-                },
-                Task {
-                    id: Uuid::new_v4(),
-                    name: "Task 2".to_string(),
-                    task_type: "action".to_string(),
-                    parameters: serde_json::json!({}),
-                    required_capabilities: vec![],
-                    estimated_duration_secs: 1,
-                    priority: 0,
-                    deadline: None,
-                    status: TaskStatus::Pending,
-                    result: None,
-                    error: None,
-                    started_at: None,
-                    finished_at: None,
-                },
-            ],
-            dependencies: vec![],
-            status: WorkflowStatus::Draft,
-            created_at: chrono::Utc::now(),
-            started_at: None,
-            finished_at: None,
-            owner_agent_id: None,
-            metadata: serde_json::json!({}),
-        };
+        let mut workflow = Workflow::new("Test Workflow", "A test workflow");
+        workflow.add_task(Task::new("Task 1", "setup", serde_json::json!({})));
+        workflow.add_task(Task::new("Task 2", "action", serde_json::json!({})));
+        workflow.on_failure = WorkflowFailureStrategy::Fail;
 
+        let wf_id = workflow.id.to_string();
         engine.register_workflow(workflow).await.unwrap();
 
-        let handle = engine.start_workflow("test-wf", HashMap::new()).await.unwrap();
+        let handle = engine.start_workflow(&wf_id, HashMap::new()).await.unwrap();
         let result = handle.await_completion().await.unwrap();
 
         assert_eq!(result.status, WorkflowStatus::Completed);
         assert_eq!(result.completed_tasks, 2);
         assert_eq!(result.failed_tasks, 0);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_pause_resume() {
+        let engine = WorkflowEngine::new(4);
+
+        let mut workflow = Workflow::new("Pause Test", "Testing pause/resume");
+        workflow.add_task(Task::new("long-task", "action", serde_json::json!({})));
+        workflow.tasks[0].estimated_duration_secs = 5;
+
+        let wf_id = workflow.id.to_string();
+        engine.register_workflow(workflow).await.unwrap();
+
+        let handle = engine.start_workflow(&wf_id, HashMap::new()).await.unwrap();
+
+        // Pause the workflow
+        handle.pause().await.unwrap();
+        let status = handle.status().await.unwrap();
+        assert_eq!(status, WorkflowStatus::Paused);
+
+        // Resume
+        handle.resume().await.unwrap();
+        let status = handle.status().await.unwrap();
+        assert_eq!(status, WorkflowStatus::Running);
+
+        // Wait for completion
+        let result = handle.await_completion().await.unwrap();
+        assert_eq!(result.status, WorkflowStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_cancel() {
+        let engine = WorkflowEngine::new(4);
+
+        let mut workflow = Workflow::new("Cancel Test", "Testing cancellation");
+        workflow.add_task(Task::new("long-task", "action", serde_json::json!({})));
+        workflow.tasks[0].estimated_duration_secs = 10;
+
+        let wf_id = workflow.id.to_string();
+        engine.register_workflow(workflow).await.unwrap();
+
+        let handle = engine.start_workflow(&wf_id, HashMap::new()).await.unwrap();
+
+        // Cancel the workflow
+        handle.cancel().await.unwrap();
+        let status = handle.status().await.unwrap();
+        assert_eq!(status, WorkflowStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_not_found() {
+        let engine = WorkflowEngine::new(4);
+        let result = engine.start_workflow("nonexistent", HashMap::new()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_workflow_progress() {
+        let engine = WorkflowEngine::new(4);
+
+        let mut workflow = Workflow::new("Progress Test", "Testing progress tracking");
+        workflow.add_task(Task::new("t1", "setup", serde_json::json!({})));
+        workflow.add_task(Task::new("t2", "action", serde_json::json!({})));
+
+        let wf_id = workflow.id.to_string();
+        engine.register_workflow(workflow).await.unwrap();
+
+        let handle = engine.start_workflow(&wf_id, HashMap::new()).await.unwrap();
+
+        // Wait for completion
+        let result = handle.await_completion().await.unwrap();
+        assert_eq!(result.status, WorkflowStatus::Completed);
+        assert_eq!(result.completed_tasks, 2);
+        assert_eq!(result.total_tasks, 2);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_engine_shutdown() {
+        let engine = WorkflowEngine::new(4);
+
+        let mut workflow = Workflow::new("Shutdown Test", "Testing shutdown");
+        workflow.add_task(Task::new("long-task", "action", serde_json::json!({})));
+        workflow.tasks[0].estimated_duration_secs = 30;
+
+        let wf_id = workflow.id.to_string();
+        engine.register_workflow(workflow).await.unwrap();
+
+        let handle = engine.start_workflow(&wf_id, HashMap::new()).await.unwrap();
+
+        // Shutdown the engine
+        engine.shutdown().await;
+
+        // The instance should be cancelled
+        let result = handle.await_completion().await.unwrap();
+        assert_eq!(result.status, WorkflowStatus::Cancelled);
     }
 }

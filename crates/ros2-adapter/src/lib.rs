@@ -56,7 +56,7 @@ impl Ros2Adapter {
 
         // Create mesh transport and agent
         let transport = MeshTransport::new(config.mesh_config).await?;
-        let agent = Agent::new(config.agent_id, transport)?;
+        let agent = Agent::new(config.agent_id, transport).await?;
 
         Ok(Self {
             node: Arc::new(node),

@@ -63,6 +63,9 @@ pub struct AgentInfo {
     pub metadata: HashMap<String, String>,
 }
 
+/// Global counter for unique instance IDs.
+static NEXT_INSTANCE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 /// Lifecycle manager for a single agent.
 pub struct LifecycleManager {
     config: LifecycleManagerConfig,
@@ -72,6 +75,8 @@ pub struct LifecycleManager {
     agent_info: RwLock<AgentInfo>,
     recovery_attempts: Mutex<usize>,
     shutdown_signal: tokio::sync::watch::Sender<bool>,
+    /// Unique identifier for this manager instance (used for clone tracking).
+    instance_id: u64,
 }
 
 impl LifecycleManager {
@@ -97,6 +102,7 @@ impl LifecycleManager {
             agent_info: RwLock::new(agent_info),
             recovery_attempts: Mutex::new(0),
             shutdown_signal,
+            instance_id: NEXT_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         })
     }
 
@@ -423,9 +429,9 @@ impl LifecycleManager {
     }
 
     /// Get current state.
-    pub async fn get_state(&self) -> AgentState {
+    pub async fn get_state(&self) -> Result<AgentState> {
         let state_machine = self.state_machine.lock().await;
-        state_machine.current_state()
+        Ok(state_machine.current_state())
     }
 
     /// Check if agent is operational.
@@ -435,13 +441,26 @@ impl LifecycleManager {
     }
 
     /// Clone the manager for background tasks.
+    /// This preserves the current state machine state and agent info
+    /// so the background task has an accurate view of the agent.
     fn clone_manager(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            state_machine: Mutex::new(StateMachine::new()),
-            health_monitor: Mutex::new(None),
-            transport: Mutex::new(None),
-            agent_info: RwLock::new(AgentInfo {
+        // We need to clone the state machine and agent info while holding locks.
+        // Since we can't hold async locks in a sync context, we use try_lock.
+        let state_machine_clone = self.state_machine.try_lock()
+            .map(|sm| {
+                let current = sm.current_state();
+                drop(sm);
+                // Create a new state machine and transition it to the current state
+                let mut new_sm = StateMachine::new();
+                // Self-transitions are allowed, so we can set the state directly
+                let _ = new_sm.transition_to(current);
+                new_sm
+            })
+            .unwrap_or_else(|_| StateMachine::new());
+
+        let agent_info_clone = self.agent_info.try_read()
+            .map(|info| info.clone())
+            .unwrap_or_else(|_| AgentInfo {
                 id: self.config.agent_id,
                 state: AgentState::Initializing,
                 health: HealthStatus::Unknown,
@@ -449,9 +468,21 @@ impl LifecycleManager {
                 last_state_change: std::time::SystemTime::now(),
                 recovery_attempts: 0,
                 metadata: HashMap::new(),
-            }),
-            recovery_attempts: Mutex::new(0),
+            });
+
+        let recovery_count = self.recovery_attempts.try_lock()
+            .map(|r| *r)
+            .unwrap_or(0);
+
+        Self {
+            config: self.config.clone(),
+            state_machine: Mutex::new(state_machine_clone),
+            health_monitor: Mutex::new(None),
+            transport: Mutex::new(None),
+            agent_info: RwLock::new(agent_info_clone),
+            recovery_attempts: Mutex::new(recovery_count),
             shutdown_signal: self.shutdown_signal.clone(),
+            instance_id: NEXT_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         }
     }
 }
@@ -471,7 +502,7 @@ mod tests {
         let config = LifecycleManagerConfig::default();
         let manager = LifecycleManager::new(config).unwrap();
         
-        let state = manager.get_state().await;
+        let state = manager.get_state().await.unwrap();
         assert_eq!(state, AgentState::Initializing);
         
         let info = manager.get_agent_info().await;
@@ -486,7 +517,7 @@ mod tests {
         
         manager.initialize().await.unwrap();
         
-        let state = manager.get_state().await;
+        let state = manager.get_state().await.unwrap();
         assert_eq!(state, AgentState::Ready);
         
         let info = manager.get_agent_info().await;
@@ -504,12 +535,105 @@ mod tests {
         manager.initialize().await.unwrap();
         manager.start().await.unwrap();
         
-        let state = manager.get_state().await;
+        let state = manager.get_state().await.unwrap();
         assert_eq!(state, AgentState::Running);
         
         manager.stop().await.unwrap();
         
-        let state = manager.get_state().await;
+        let state = manager.get_state().await.unwrap();
         assert_eq!(state, AgentState::Stopped);
+    }
+
+    #[tokio::test]
+    async fn test_clone_manager_preserves_state() {
+        let config = LifecycleManagerConfig::default();
+        let manager = LifecycleManager::new(config).unwrap();
+        
+        // Initialize and start
+        manager.initialize().await.unwrap();
+        manager.start().await.unwrap();
+        
+        let state = manager.get_state().await.unwrap();
+        assert_eq!(state, AgentState::Running);
+        
+        // Clone the manager
+        let cloned = manager.clone_manager();
+        
+        // The cloned manager should have the same state
+        let cloned_state = cloned.get_state().await.unwrap();
+        assert_eq!(cloned_state, AgentState::Running);
+        
+        // The cloned manager should have a different instance_id
+        assert_ne!(manager.instance_id, cloned.instance_id);
+    }
+
+    #[tokio::test]
+    async fn test_suspend_resume() {
+        let config = LifecycleManagerConfig {
+            enable_health_monitoring: false,
+            ..Default::default()
+        };
+        let manager = LifecycleManager::new(config).unwrap();
+        
+        manager.initialize().await.unwrap();
+        manager.start().await.unwrap();
+        
+        // Suspend
+        manager.suspend().await.unwrap();
+        let state = manager.get_state().await.unwrap();
+        assert_eq!(state, AgentState::Suspended);
+        
+        // Resume
+        manager.resume().await.unwrap();
+        let state = manager.get_state().await.unwrap();
+        assert_eq!(state, AgentState::Running);
+    }
+
+    #[tokio::test]
+    async fn test_maintenance_mode() {
+        let config = LifecycleManagerConfig {
+            enable_health_monitoring: false,
+            ..Default::default()
+        };
+        let manager = LifecycleManager::new(config).unwrap();
+        
+        manager.initialize().await.unwrap();
+        
+        // Enter maintenance from Ready
+        manager.enter_maintenance().await.unwrap();
+        let state = manager.get_state().await.unwrap();
+        assert_eq!(state, AgentState::Maintenance);
+        
+        // Exit maintenance
+        manager.exit_maintenance().await.unwrap();
+        let state = manager.get_state().await.unwrap();
+        assert_eq!(state, AgentState::Ready);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_transition() {
+        let config = LifecycleManagerConfig::default();
+        let manager = LifecycleManager::new(config).unwrap();
+        
+        // Cannot stop before starting
+        let result = manager.stop().await;
+        assert!(result.is_err());
+        
+        // Cannot suspend before starting
+        let result = manager.suspend().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_agent_info() {
+        let config = LifecycleManagerConfig::default();
+        let manager = LifecycleManager::new(config).unwrap();
+        
+        let info = manager.get_agent_info().await;
+        assert_eq!(info.id, 1);
+        assert_eq!(info.state, AgentState::Initializing);
+        assert_eq!(info.health, HealthStatus::Unknown);
+        assert!(info.started_at.is_none());
+        assert_eq!(info.recovery_attempts, 0);
     }
 }
