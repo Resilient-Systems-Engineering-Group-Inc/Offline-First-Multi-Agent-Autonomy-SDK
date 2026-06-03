@@ -40,7 +40,9 @@ impl PyAgent {
             local_agent_id: AgentId(agent_id),
             ..Default::default()
         };
-        let agent = Agent::new(AgentId(agent_id), config)
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let agent = rt.block_on(Agent::new(AgentId(agent_id), config))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self { inner: agent })
     }

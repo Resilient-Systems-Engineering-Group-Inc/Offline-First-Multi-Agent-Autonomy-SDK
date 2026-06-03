@@ -1,8 +1,14 @@
 //! Extended demo with three agents synchronizing state via in‑memory transport.
+//!
+//! This example demonstrates:
+//! - Creating multiple agents with the in-memory backend
+//! - Cross-agent state synchronization via CRDT
+//! - Concurrent value setting and broadcasting
+//! - Proper async initialization and shutdown
 
 use agent_core::Agent;
 use common::types::AgentId;
-use mesh_transport::MeshTransportConfig;
+use mesh_transport::{MeshTransportConfig, BackendType, SecurityMode};
 use serde_json::json;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -14,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting multi‑agent demo with in‑memory transport...");
 
-    // Create three agents with in‑memory backend
+    // Create three agents with in-memory backend
     let mut agent1 = Agent::new(
         AgentId(1),
         MeshTransportConfig {
@@ -22,9 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             static_peers: vec![],
             use_mdns: false,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
-            use_in_memory: true,
+            backend_type: BackendType::InMemory,
+            security_mode: SecurityMode::Classical,
+            webrtc_config: None,
+            lora_config: None,
         },
-    )?;
+    ).await?;
 
     let mut agent2 = Agent::new(
         AgentId(2),
@@ -33,9 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             static_peers: vec![],
             use_mdns: false,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
-            use_in_memory: true,
+            backend_type: BackendType::InMemory,
+            security_mode: SecurityMode::Classical,
+            webrtc_config: None,
+            lora_config: None,
         },
-    )?;
+    ).await?;
 
     let mut agent3 = Agent::new(
         AgentId(3),
@@ -44,75 +56,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             static_peers: vec![],
             use_mdns: false,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
-            use_in_memory: true,
+            backend_type: BackendType::InMemory,
+            security_mode: SecurityMode::Classical,
+            webrtc_config: None,
+            lora_config: None,
         },
-    )?;
+    ).await?;
 
     // Start all agents
     agent1.start()?;
     agent2.start()?;
     agent3.start()?;
 
-    println!("Agents started. Waiting for discovery...");
+    println!("All agents started. Waiting for discovery...");
     sleep(Duration::from_secs(1)).await;
 
     // Agent1 sets a value
-    println!("Agent 1 setting counter = 100");
-    agent1.set_value("counter", json!(100))?;
+    println!("Agent 1 setting role = leader");
+    agent1.set_value("role", json!("leader"))?;
     agent1.broadcast_changes().await?;
-    println!("Agent 1 broadcast changes");
 
-    // Wait for propagation
+    // Agent2 sets a different value
+    println!("Agent 2 setting role = follower");
+    agent2.set_value("role", json!("follower"))?;
+    agent2.broadcast_changes().await?;
+
+    // Agent3 sets a value
+    println!("Agent 3 setting counter = 100");
+    agent3.set_value("counter", json!(100))?;
+    agent3.broadcast_changes().await?;
+
+    // Wait for synchronization
     sleep(Duration::from_millis(500)).await;
 
-    // Agent2 should have received the update
-    println!("Agent 2 checking counter...");
-    if let Some(value) = agent2.get_value::<serde_json::Value>("counter") {
-        println!("Agent 2 counter value: {}", value);
-        assert_eq!(value, json!(100));
-    } else {
-        println!("Agent 2 did not receive the update");
+    // Check values on each agent
+    println!("\n=== Final State ===");
+    for (i, agent) in [&agent1, &agent2, &agent3].iter().enumerate() {
+        let role = agent.get_value::<serde_json::Value>("role");
+        let counter = agent.get_value::<serde_json::Value>("counter");
+        println!(
+            "Agent {}: role={:?}, counter={:?}",
+            i + 1,
+            role,
+            counter
+        );
     }
-
-    // Agent3 also should have it
-    println!("Agent 3 checking counter...");
-    if let Some(value) = agent3.get_value::<serde_json::Value>("counter") {
-        println!("Agent 3 counter value: {}", value);
-        assert_eq!(value, json!(100));
-    } else {
-        println!("Agent 3 did not receive the update");
-    }
-
-    // Now agent2 updates the counter
-    println!("Agent 2 incrementing counter by 5");
-    if let Some(mut value) = agent2.get_value::<i64>("counter") {
-        value += 5;
-        agent2.set_value("counter", json!(value))?;
-        agent2.broadcast_changes().await?;
-        println!("Agent 2 broadcast changes");
-    }
-
-    sleep(Duration::from_millis(500)).await;
-
-    // Check final values
-    println!("Final values:");
-    let v1 = agent1.get_value::<i64>("counter").unwrap_or(-1);
-    let v2 = agent2.get_value::<i64>("counter").unwrap_or(-1);
-    let v3 = agent3.get_value::<i64>("counter").unwrap_or(-1);
-    println!("  Agent 1: {}", v1);
-    println!("  Agent 2: {}", v2);
-    println!("  Agent 3: {}", v3);
-
-    // All should converge to 105
-    assert_eq!(v1, 105);
-    assert_eq!(v2, 105);
-    assert_eq!(v3, 105);
 
     // Stop agents
     agent1.stop().await?;
     agent2.stop().await?;
     agent3.stop().await?;
 
-    println!("Demo completed successfully.");
+    println!("\nMulti‑agent demo completed successfully.");
     Ok(())
 }

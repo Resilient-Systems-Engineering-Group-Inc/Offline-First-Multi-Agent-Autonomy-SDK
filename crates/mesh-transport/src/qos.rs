@@ -57,6 +57,9 @@ pub struct QosProfile {
     pub droppable: bool,
     /// Time‑to‑live (after which the message is discarded).
     pub ttl: Option<Duration>,
+    /// Optional target peer for directed messages.
+    /// If None, the message is broadcast to all peers.
+    pub target_peer: Option<common::types::AgentId>,
 }
 
 impl Default for QosProfile {
@@ -224,8 +227,11 @@ pub mod integration {
 
     impl QosSender for MeshTransport {
         fn send_with_qos(&mut self, payload: Vec<u8>, profile: QosProfile) -> Result<()> {
-            // For now, delegate to normal send; later we could implement prioritization.
-            self.broadcast(payload)
+            // Use target_peer if specified, otherwise broadcast
+            match profile.target_peer {
+                Some(peer_id) => self.send_to(peer_id, payload),
+                None => self.broadcast(payload),
+            }
         }
     }
 }

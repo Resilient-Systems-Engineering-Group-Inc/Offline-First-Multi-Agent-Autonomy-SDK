@@ -7,7 +7,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/Offline-First-Multi-Agent-Autonomy-SDK"
 
 [dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
+tokio-stream = "0.1"
 serde = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -16,6 +17,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 common = { path = "../common" }
+rand = "0.8"
 # Security
 ed25519-dalek = { version = "2.0", features = ["serde", "rand_core"] }
 rand_core = "0.6"

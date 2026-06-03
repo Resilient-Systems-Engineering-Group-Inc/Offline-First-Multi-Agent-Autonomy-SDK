@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::{sleep, Duration};
 use futures::stream::{BoxStream, StreamExt};
 use async_trait::async_trait;
@@ -21,7 +21,7 @@ lazy_static! {
 /// Shared router that forwards messages between backends.
 struct InMemoryRouter {
     /// Map from agent ID to its event sender.
-    subscribers: RwLock<HashMap<AgentId, mpsc::UnboundedSender<TransportEvent>>>,
+    subscribers: RwLock<HashMap<AgentId, broadcast::Sender<TransportEvent>>>,
 }
 
 impl InMemoryRouter {
@@ -32,7 +32,7 @@ impl InMemoryRouter {
     }
 
     /// Register a subscriber for the given agent ID.
-    async fn subscribe(&self, agent_id: AgentId, tx: mpsc::UnboundedSender<TransportEvent>) {
+    async fn subscribe(&self, agent_id: AgentId, tx: broadcast::Sender<TransportEvent>) {
         self.subscribers.write().await.insert(agent_id, tx);
     }
 
@@ -71,15 +71,15 @@ impl InMemoryRouter {
 /// In‑memory backend that uses a shared router.
 pub struct InMemoryBackend {
     local_agent_id: AgentId,
-    event_tx: mpsc::UnboundedSender<TransportEvent>,
-    event_rx: mpsc::UnboundedReceiver<TransportEvent>,
+    event_tx: broadcast::Sender<TransportEvent>,
+    event_rx: broadcast::Receiver<TransportEvent>,
     known_peers: Vec<PeerInfo>,
 }
 
 impl InMemoryBackend {
     /// Create a new in‑memory backend.
     pub async fn new(config: MeshTransportConfig) -> Result<Self> {
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = broadcast::channel(256);
         GLOBAL_ROUTER.subscribe(config.local_agent_id, event_tx.clone()).await;
 
         // Simulate known peers (for demo, we'll add them later via `add_peer`)
@@ -137,8 +137,12 @@ impl Backend for InMemoryBackend {
     }
 
     fn events(&mut self) -> BoxStream<'static, TransportEvent> {
-        let rx = std::mem::replace(&mut self.event_rx, mpsc::unbounded_channel().1);
-        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+        // Create a new receiver by subscribing to the broadcast channel again.
+        // This avoids discarding the old receiver and losing events.
+        let rx = self.event_tx.subscribe();
+        Box::pin(tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|result| {
+            futures::future::ready(result.ok())
+        }))
     }
 
     fn local_agent_id(&self) -> AgentId {

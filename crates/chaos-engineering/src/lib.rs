@@ -7,21 +7,11 @@
 //! - Blast radius control
 //! - Automated rollback
 
-pub mod experiment;
-pub mod attack;
-pub mod hypothesis;
-pub mod monitor;
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tracing::info;
-
-pub use experiment::*;
-pub use attack::*;
-pub use hypothesis::*;
-pub use monitor::*;
 
 /// Chaos engineering configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

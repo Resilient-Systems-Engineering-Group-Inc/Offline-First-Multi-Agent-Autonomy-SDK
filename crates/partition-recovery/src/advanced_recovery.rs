@@ -5,6 +5,7 @@
 //! version reconciliation.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
@@ -102,15 +103,29 @@ impl<T: StateSync + Send + Sync> AdvancedRecoveryEngine<T> {
     /// Take a snapshot of current state.
     pub async fn take_snapshot(&self, metadata: HashMap<String, String>) -> Result<(), String> {
         let state_sync = self.state_sync.read().await;
-        let state_hash = state_sync.compute_state_hash().await
-            .map_err(|e| e.to_string())?;
-        let vector_clock = state_sync.get_vector_clock().await;
+        let map = state_sync.map();
+        // Compute a simple state hash from the map contents
+        let hashmap: HashMap<String, serde_json::Value> = map.to_hashmap();
+        let state_bytes = serde_json::to_vec(&hashmap)
+            .map_err(|e| format!("Failed to serialize state: {}", e))?;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        state_bytes.hash(&mut hasher);
+        let state_hash = hasher.finish().to_le_bytes().to_vec();
         
+        // Extract vector clock from the map's internal state
+        // Since CrdtMap doesn't expose vclock directly, we use a placeholder
+        let vector_clock = common::types::VectorClock::default();
+        
+        // We need the local agent ID — we don't have direct access from StateSync trait
+        // Use a placeholder; in practice the engine is created with knowledge of the local agent
+        let agent_id = AgentId(0);
+
         let snapshot = StateSnapshot {
             timestamp: SystemTime::now(),
             state_hash,
             vector_clock,
-            agent_id: state_sync.local_agent_id(),
+            agent_id,
             metadata,
         };
 

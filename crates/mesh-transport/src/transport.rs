@@ -9,8 +9,9 @@ use common::types::{AgentId, PeerInfo};
 use common::error::Result;
 use common::metrics;
 use async_trait::async_trait;
-use futures::stream::BoxStream;
-use tokio::sync::mpsc;
+use futures::stream::{BoxStream, StreamExt};
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 /// Type of backend to use for the mesh transport.
 #[derive(Debug, Clone, PartialEq)]
@@ -125,14 +126,13 @@ impl MeshTransportConfig {
 /// The main mesh transport struct.
 pub struct MeshTransport {
     backend: Box<dyn Backend>,
-    event_tx: mpsc::UnboundedSender<crate::message::TransportEvent>,
-    event_rx: mpsc::UnboundedReceiver<crate::message::TransportEvent>,
+    event_tx: broadcast::Sender<crate::message::TransportEvent>,
 }
 
 impl MeshTransport {
     /// Create a new mesh transport with the given configuration.
     pub async fn new(config: MeshTransportConfig) -> Result<Self> {
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, _) = broadcast::channel(256);
 
         let mut backend: Box<dyn Backend> = match config.backend_type {
             BackendType::InMemory => {
@@ -161,7 +161,6 @@ impl MeshTransport {
         Ok(Self {
             backend,
             event_tx,
-            event_rx,
         })
     }
 
@@ -199,8 +198,11 @@ impl MeshTransport {
 
     /// Return a stream of transport events.
     pub fn events(&mut self) -> BoxStream<'static, crate::message::TransportEvent> {
-        let rx = std::mem::replace(&mut self.event_rx, mpsc::unbounded_channel().1);
-        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+        let rx = self.event_tx.subscribe();
+        Box::pin(
+            tokio_stream::wrappers::BroadcastStream::new(rx)
+                .filter_map(|result| futures::future::ready(result.ok()))
+        )
     }
 }
 

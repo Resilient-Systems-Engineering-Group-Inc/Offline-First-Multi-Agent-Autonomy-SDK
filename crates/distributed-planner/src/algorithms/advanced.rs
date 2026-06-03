@@ -345,7 +345,7 @@ impl PlanningAlgorithm for DynamicLoadBalancer {
             })
             .collect();
 
-        agent_loads.sort_by_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        agent_loads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
         // Assign tasks to least loaded agents
         for task in tasks {
@@ -358,7 +358,7 @@ impl PlanningAlgorithm for DynamicLoadBalancer {
                         *load += 1.0;
                     }
                 }
-                agent_loads.sort_by_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                agent_loads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
             }
         }
 

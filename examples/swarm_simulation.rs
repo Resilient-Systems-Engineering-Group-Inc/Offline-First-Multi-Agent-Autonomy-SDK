@@ -1,8 +1,8 @@
 //! Swarm simulation with real‑time visualization.
 
-use offline_first_autonomy::agent_core::Agent;
-use offline_first_autonomy::mesh_transport::{MeshTransport, MeshTransportConfig};
-use offline_first_autonomy::state_sync::CrdtMap;
+use agent_core::Agent;
+use mesh_transport::{MeshTransport, MeshTransportConfig};
+use state_sync::CrdtMap;
 use common::types::AgentId;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -31,8 +31,8 @@ struct SimAgent {
 }
 
 impl SimAgent {
-    fn new(id: u64, config: MeshTransportConfig) -> Self {
-        let agent = Agent::new(AgentId(id), config).expect("Failed to create agent");
+    async fn new(id: u64, config: MeshTransportConfig) -> Self {
+        let agent = Agent::new(AgentId(id), config).await.expect("Failed to create agent");
         Self {
             id: AgentId(id),
             agent,
@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut agents = Vec::new();
     for i in 0..5 {
         let config = MeshTransportConfig::in_memory();
-        let mut sim_agent = SimAgent::new(i, config);
+        let mut sim_agent = SimAgent::new(i, config).await;
         sim_agent.agent.start().expect("Agent start failed");
         agents.push(sim_agent);
     }

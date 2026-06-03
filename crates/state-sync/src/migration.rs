@@ -45,22 +45,37 @@ impl Migration for KeyRenameMigration {
     }
 
     fn apply(&self, map: &mut CrdtMap) -> Result<()> {
-        // We need to extract all key‑value pairs, rename keys, and re‑insert.
-        // This is a simplified implementation that assumes the map is small.
-        let hashmap: Map<String, Value> = map.to_hashmap();
-        for (old_key, new_key) in &self.rename_map {
-            if let Some(value) = hashmap.get(old_key) {
-                // Delete old key (but we cannot delete because we are iterating over a borrowed map).
-                // Instead, we'll directly manipulate the inner map? This is tricky.
-                // For simplicity, we'll just log and skip.
-                // A proper implementation would require a more sophisticated approach.
+        // Extract all key‑value pairs with their authors
+        let entries: Vec<(String, Value, u64)> = map.to_hashmap_with_authors()
+            .into_iter()
+            .map(|(k, (v, author))| (k, v, author.0))
+            .collect();
+
+        // Build a set of old keys to rename
+        let old_keys: std::collections::HashSet<String> = self.rename_map
+            .iter()
+            .map(|(old, _)| old.clone())
+            .collect();
+
+        // Delete all old keys that are being renamed
+        for (key, _, author) in &entries {
+            if old_keys.contains(key) {
+                map.delete(key, AgentId(*author));
             }
         }
-        // TODO: implement actual key renaming.
-        // This is a placeholder.
+
+        // Re-insert with new keys
+        for (key, value, author) in &entries {
+            if let Some((_, new_key)) = self.rename_map.iter().find(|(old, _)| old == key) {
+                map.set(new_key, value.clone(), AgentId(*author));
+            }
+        }
+
         Ok(())
     }
 }
+
+use common::types::AgentId;
 
 /// A migration that transforms values using a custom function.
 pub struct ValueTransformMigration {
@@ -92,13 +107,23 @@ impl Migration for ValueTransformMigration {
     }
 
     fn apply(&self, map: &mut CrdtMap) -> Result<()> {
-        let hashmap: Map<String, Value> = map.to_hashmap();
-        for (key, value) in hashmap {
-            let new_value = (self.transform)(&key, value)?;
-            // Re‑insert with same key (but we need to know the author).
-            // Since we don't have author information, we cannot directly set.
-            // This is a limitation; we need to store author per key.
+        // Extract all key‑value pairs with their authors
+        let entries: Vec<(String, Value, u64)> = map.to_hashmap_with_authors()
+            .into_iter()
+            .map(|(k, (v, author))| (k, v, author.0))
+            .collect();
+
+        // Delete all existing entries
+        for (key, _, author) in &entries {
+            map.delete(key, AgentId(*author));
         }
+
+        // Re-insert with transformed values
+        for (key, value, author) in &entries {
+            let new_value = (self.transform)(key, value)?;
+            map.set(key, new_value, AgentId(*author));
+        }
+
         Ok(())
     }
 }
@@ -150,4 +175,91 @@ pub fn default_migration_manager() -> MigrationManager {
         vec![("cpu_usage".to_string(), "cpu_percent".to_string())],
     ));
     manager
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_key_rename_migration() {
+        let mut map = CrdtMap::new();
+        map.set("cpu_usage", json!(85.0), AgentId(1));
+        map.set("memory_usage", json!(1024), AgentId(1));
+
+        let migration = KeyRenameMigration::new(
+            "1.0",
+            "1.1",
+            vec![("cpu_usage".to_string(), "cpu_percent".to_string())],
+        );
+
+        let result = migration.apply(&mut map);
+        assert!(result.is_ok());
+
+        // Old key should be gone
+        let old: Option<serde_json::Value> = map.get("cpu_usage");
+        assert!(old.is_none());
+
+        // New key should exist with same value
+        let new: Option<serde_json::Value> = map.get("cpu_percent");
+        assert!(new.is_some());
+        assert_eq!(new.unwrap(), json!(85.0));
+
+        // Unrelated key should remain
+        let mem: Option<serde_json::Value> = map.get("memory_usage");
+        assert!(mem.is_some());
+    }
+
+    #[test]
+    fn test_value_transform_migration() {
+        let mut map = CrdtMap::new();
+        map.set("temperature", json!(30.0), AgentId(1));
+
+        // Convert Celsius to Fahrenheit
+        let migration = ValueTransformMigration::new(
+            "1.0",
+            "2.0",
+            |key: &str, value: Value| -> Result<Value> {
+                if key == "temperature" {
+                    if let Some(celsius) = value.as_f64() {
+                        let fahrenheit = celsius * 9.0 / 5.0 + 32.0;
+                        Ok(json!(fahrenheit))
+                    } else {
+                        Ok(value)
+                    }
+                } else {
+                    Ok(value)
+                }
+            },
+        );
+
+        let result = migration.apply(&mut map);
+        assert!(result.is_ok());
+
+        let temp: Option<serde_json::Value> = map.get("temperature");
+        assert!(temp.is_some());
+        assert_eq!(temp.unwrap(), json!(86.0)); // 30°C = 86°F
+    }
+
+    #[test]
+    fn test_migration_manager() {
+        let mut map = CrdtMap::new();
+        map.set("cpu_usage", json!(85.0), AgentId(1));
+
+        let manager = default_migration_manager();
+        let result = manager.migrate(
+            &mut map,
+            &SchemaVersion("1.0".to_string()),
+            &SchemaVersion("1.1".to_string()),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), SchemaVersion("1.1".to_string()));
+
+        // Verify the rename happened
+        let old: Option<serde_json::Value> = map.get("cpu_usage");
+        assert!(old.is_none());
+        let new: Option<serde_json::Value> = map.get("cpu_percent");
+        assert!(new.is_some());
+    }
 }

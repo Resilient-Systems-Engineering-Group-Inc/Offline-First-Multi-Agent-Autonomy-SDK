@@ -108,6 +108,26 @@ impl CrdtMap {
             .collect()
     }
 
+    /// Export the map as a HashMap with author information.
+    /// Returns a map of key -> (value, author) for all entries.
+    /// The author is determined from the operation log (last writer wins approximation).
+    pub fn to_hashmap_with_authors(&self) -> HashMap<String, (serde_json::Value, AgentId)> {
+        let mut result = HashMap::new();
+        // Build a map of key -> (value, author) by scanning the op log
+        // and applying the last write for each key
+        for op in &self.op_log {
+            match op {
+                Op::Set { key, value, author, .. } => {
+                    result.insert(key.clone(), (value.clone(), *author));
+                }
+                Op::Delete { key, .. } => {
+                    result.remove(key);
+                }
+            }
+        }
+        result
+    }
+
     /// Generate a delta representing changes since the given vector clock.
     pub fn delta_since(&self, since: &VectorClock) -> Option<Delta> {
         let mut ops = Vec::new();

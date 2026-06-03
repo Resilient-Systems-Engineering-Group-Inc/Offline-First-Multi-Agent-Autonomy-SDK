@@ -1,8 +1,14 @@
 //! Simple example of two agents synchronizing a counter.
+//!
+//! This example demonstrates:
+//! - Creating agents with the in-memory backend
+//! - Setting and getting values in the CRDT map
+//! - Broadcasting changes between agents
+//! - Proper async initialization
 
 use agent_core::Agent;
 use common::types::AgentId;
-use mesh_transport::MeshTransportConfig;
+use mesh_transport::{MeshTransportConfig, BackendType};
 use serde_json::json;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -12,33 +18,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    // Create two agents with different IDs
+    // Create two agents with in-memory backend for testing
     let mut agent1 = Agent::new(
         AgentId(1),
         MeshTransportConfig {
             local_agent_id: AgentId(1),
             static_peers: vec![],
-            use_mdns: true,
+            use_mdns: false,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
+            backend_type: BackendType::InMemory,
+            security_mode: mesh_transport::SecurityMode::Classical,
+            webrtc_config: None,
+            lora_config: None,
         },
-    )?;
+    ).await?;
 
     let mut agent2 = Agent::new(
         AgentId(2),
         MeshTransportConfig {
             local_agent_id: AgentId(2),
             static_peers: vec![],
-            use_mdns: true,
+            use_mdns: false,
             listen_addr: "/ip4/0.0.0.0/tcp/0".to_string(),
+            backend_type: BackendType::InMemory,
+            security_mode: mesh_transport::SecurityMode::Classical,
+            webrtc_config: None,
+            lora_config: None,
         },
-    )?;
+    ).await?;
 
     // Start both agents
     agent1.start()?;
     agent2.start()?;
 
     println!("Agents started. Waiting for discovery...");
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // Agent1 sets a value in its CRDT map
     println!("Agent 1 setting counter = 42");
@@ -49,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Agent 1 broadcast changes");
 
     // Wait a bit for synchronization
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_millis(500)).await;
 
     // Agent2 should have received the update
     println!("Agent 2 checking counter...");

@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("1. Created version manager and lineage tracker");
 
     // 2. Create some sample data versions
-    let agent_id = AgentId::from_u128(12345);
+    let agent_id = AgentId(12345);
     
     // Create initial sensor data
     let sensor_data_ref = DataReference {

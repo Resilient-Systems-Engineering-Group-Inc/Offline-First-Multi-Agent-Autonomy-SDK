@@ -8,8 +8,7 @@ use tokio::sync::RwLock;
 use serde_json::json;
 use std::collections::HashMap;
 use common::types::AgentId;
-use mesh_transport::{MeshTransport, MeshTransportConfig};
-use state_sync::StateSync;
+use mesh_transport::{BackendType, MeshTransportConfig};
 use agent_core::Agent;
 use std::net::SocketAddr;
 
@@ -50,10 +49,11 @@ impl AppState {
 async fn run_agent(agent_id: u64, state: AppState) -> anyhow::Result<()> {
     let config = MeshTransportConfig {
         local_agent_id: AgentId(agent_id),
-        use_in_memory: true, // Use in‑memory backend for demo
+        backend_type: BackendType::InMemory,
+        use_mdns: false,
         ..Default::default()
     };
-    let mut agent = Agent::new(AgentId(agent_id), config)?;
+    let mut agent = Agent::new(AgentId(agent_id), config).await?;
     agent.start()?;
 
     // Simulate some changes

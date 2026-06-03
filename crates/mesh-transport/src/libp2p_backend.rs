@@ -13,11 +13,13 @@ use libp2p::{
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::task::JoinHandle;
 use futures::stream::{BoxStream, StreamExt};
 use async_trait::async_trait;
 use tokio::runtime::Handle;
+use tokio_stream::wrappers::BroadcastStream;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use common::types::{AgentId, PeerInfo};
 use common::metrics;
@@ -179,17 +181,23 @@ fn peer_id_to_agent_id(peer_id: &PeerId) -> AgentId {
 
 /// libp2p backend that manages a swarm.
 pub struct Libp2pBackend {
-    swarm: Swarm<MeshBehaviour>,
+    swarm: Option<Swarm<MeshBehaviour>>,
     local_agent_id: AgentId,
     local_peer_id: PeerId,
+    /// Sender used by MeshBehaviour to push events (mpsc, internal).
     event_tx: mpsc::UnboundedSender<TransportEvent>,
-    event_rx: mpsc::UnboundedReceiver<TransportEvent>,
+    /// Broadcast channel for external consumers — allows multiple subscribers without data loss.
+    broadcast_tx: broadcast::Sender<TransportEvent>,
     /// Mapping from AgentId to PeerId for connected peers.
     connected_peers: Arc<RwLock<HashMap<AgentId, PeerId>>>,
     /// Security manager for signing and verifying messages.
     security_manager: SecurityManager,
     /// Background task handle for swarm event loop.
-    _task_handle: Option<JoinHandle<()>>,
+    task_handle: Option<JoinHandle<()>>,
+    /// Background task handle for the mpsc→broadcast bridge.
+    bridge_handle: Option<JoinHandle<()>>,
+    /// Shutdown signal for graceful termination.
+    shutdown: Arc<AtomicBool>,
 }
 
 impl Libp2pBackend {
@@ -205,8 +213,37 @@ impl Libp2pBackend {
             .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
             .boxed();
 
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let behaviour = MeshBehaviour::new(event_tx, config.use_mdns);
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+        let behaviour = MeshBehaviour::new(event_tx.clone(), config.use_mdns);
+
+        // Broadcast channel for external consumers — capacity 256, allows multiple subscribers.
+        let (broadcast_tx, _) = broadcast::channel(256);
+
+        // Bridge task: forwards events from mpsc (internal, from MeshBehaviour) to broadcast (external).
+        let bridge_broadcast_tx = broadcast_tx.clone();
+        let bridge_shutdown = shutdown.clone();
+        let bridge_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    maybe_event = event_rx.recv() => {
+                        match maybe_event {
+                            Some(event) => {
+                                let _ = bridge_broadcast_tx.send(event);
+                            }
+                            None => {
+                                // mpsc channel closed, exit bridge
+                                break;
+                            }
+                        }
+                    }
+                    _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                        if bridge_shutdown.load(Ordering::SeqCst) {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
 
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
         // Listen on the configured address
@@ -222,22 +259,28 @@ impl Libp2pBackend {
         }
 
         Ok(Self {
-            swarm,
+            swarm: Some(swarm),
             local_agent_id: config.local_agent_id,
             local_peer_id,
             event_tx,
-            event_rx,
+            broadcast_tx,
             connected_peers: Arc::new(RwLock::new(HashMap::new())),
             security_manager: SecurityManager::generate(),
-            _task_handle: None,
+            task_handle: None,
+            bridge_handle: Some(bridge_handle),
+            shutdown: Arc::new(AtomicBool::new(false)),
         })
     }
 
     /// Run the swarm event loop.
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut swarm = match self.swarm.take() {
+            Some(swarm) => swarm,
+            None => return Err("Swarm already taken or not initialized".into()),
+        };
         loop {
             tokio::select! {
-                event = self.swarm.select_next_some() => {
+                event = swarm.select_next_some() => {
                     match event {
                         SwarmEvent::NewListenAddr { address, .. } => {
                             tracing::info!("Listening on {}", address);
@@ -253,6 +296,7 @@ impl Libp2pBackend {
                 }
             }
         }
+        self.swarm = Some(swarm);
         Ok(())
     }
 
@@ -263,18 +307,25 @@ impl Libp2pBackend {
 
     /// Get incoming events.
     pub async fn next_event(&mut self) -> Option<TransportEvent> {
-        self.event_rx.recv().await
+        let mut rx = self.broadcast_tx.subscribe();
+        rx.recv().await.ok()
     }
 
     /// Send a message to a peer.
     pub async fn send(&mut self, peer_id: PeerId, payload: Vec<u8>) -> Result<(), Box<dyn Error>> {
-        self.swarm.behaviour_mut().request_response.send_request(&peer_id, payload);
+        if let Some(swarm) = self.swarm.as_mut() {
+            swarm.behaviour_mut().request_response.send_request(&peer_id, payload);
+        }
         Ok(())
     }
 
     /// Broadcast a message to all known peers.
     pub async fn broadcast(&mut self, payload: Vec<u8>) -> Result<(), Box<dyn Error>> {
-        let peers: Vec<PeerId> = self.swarm.connected_peers().cloned().collect();
+        let peers: Vec<PeerId> = if let Some(swarm) = self.swarm.as_ref() {
+            swarm.connected_peers().cloned().collect()
+        } else {
+            Vec::new()
+        };
         for peer in peers {
             self.send(peer, payload.clone()).await?;
         }
@@ -285,10 +336,14 @@ impl Libp2pBackend {
 #[async_trait]
 impl Backend for Libp2pBackend {
     async fn start(&mut self) -> Result<()> {
-        // Spawn a background task to process swarm events.
-        let mut swarm = std::mem::replace(&mut self.swarm, unreachable!()); // We'll replace it back
+        // Take the swarm out of the Option — safe even if called multiple times
+        let mut swarm = match self.swarm.take() {
+            Some(swarm) => swarm,
+            None => return Ok(()), // Already started, no-op
+        };
         let event_tx = self.event_tx.clone();
         let connected_peers = self.connected_peers.clone();
+        let shutdown = self.shutdown.clone();
         let task = tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -322,20 +377,40 @@ impl Backend for Libp2pBackend {
                             _ => {}
                         }
                     }
-                    _ = tokio::signal::ctrl_c() => {
-                        break;
+                    _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                        if shutdown.load(Ordering::SeqCst) {
+                            tracing::info!("Libp2p backend shutting down");
+                            break;
+                        }
                     }
                 }
             }
         });
-        // Put swarm back (we need to keep it)
-        self.swarm = swarm;
-        self._task_handle = Some(task);
+        // Put swarm back into the Option
+        self.swarm = Some(swarm);
+        self.task_handle = Some(task);
         Ok(())
     }
 
     async fn stop(&mut self) -> Result<()> {
-        // No explicit stop mechanism yet.
+        // Signal shutdown
+        self.shutdown.store(true, Ordering::SeqCst);
+        // Wait for the background task to finish
+        if let Some(handle) = self.task_handle.take() {
+            let _ = tokio::time::timeout(
+                tokio::time::Duration::from_secs(5),
+                handle,
+            ).await;
+        }
+        // Stop the mpsc→broadcast bridge
+        if let Some(handle) = self.bridge_handle.take() {
+            let _ = tokio::time::timeout(
+                tokio::time::Duration::from_secs(5),
+                handle,
+            ).await;
+        }
+        // Clear connected peers
+        self.connected_peers.write().await.clear();
         Ok(())
     }
 
@@ -348,7 +423,9 @@ impl Backend for Libp2pBackend {
         let signed = self.security_manager.sign(payload);
         let bytes = signed.to_bytes()
             .map_err(|e| common::error::SdkError::Security(format!("Failed to serialize signed message: {}", e)))?;
-        self.swarm.behaviour_mut().request_response.send_request(&peer_id, bytes);
+        if let Some(swarm) = self.swarm.as_mut() {
+            swarm.behaviour_mut().request_response.send_request(&peer_id, bytes);
+        }
         Ok(())
     }
 
@@ -359,8 +436,10 @@ impl Backend for Libp2pBackend {
         let signed = self.security_manager.sign(payload);
         let bytes = signed.to_bytes()
             .map_err(|e| common::error::SdkError::Security(format!("Failed to serialize signed message: {}", e)))?;
-        for peer in peers {
-            self.swarm.behaviour_mut().request_response.send_request(&peer, bytes.clone());
+        if let Some(swarm) = self.swarm.as_mut() {
+            for peer in peers {
+                swarm.behaviour_mut().request_response.send_request(&peer, bytes.clone());
+            }
         }
         Ok(())
     }
@@ -387,8 +466,11 @@ impl Backend for Libp2pBackend {
     }
 
     fn events(&mut self) -> BoxStream<'static, TransportEvent> {
-        let rx = std::mem::replace(&mut self.event_rx, mpsc::unbounded_channel().1);
-        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+        let rx = self.broadcast_tx.subscribe();
+        Box::pin(
+            BroadcastStream::new(rx)
+                .filter_map(|result| futures::future::ready(result.ok()))
+        )
     }
 
     fn local_agent_id(&self) -> AgentId {

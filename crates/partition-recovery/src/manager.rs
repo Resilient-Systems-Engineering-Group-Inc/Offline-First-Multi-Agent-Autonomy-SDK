@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, timeout};
+use futures::StreamExt;
 use common::types::AgentId;
 use mesh_transport::{MeshTransport, TransportEvent};
 use state_sync::{StateSync, DefaultStateSync};
@@ -151,8 +152,6 @@ impl<T: StateSync + Send + Sync + 'static> PartitionRecoveryManager<T> {
         self.event_tx.clone()
     }
 }
-
-use futures::StreamExt;
 
 #[cfg(test)]
 mod tests {
