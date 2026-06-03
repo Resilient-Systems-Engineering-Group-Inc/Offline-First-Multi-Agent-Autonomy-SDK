@@ -219,6 +219,9 @@ impl Libp2pBackend {
         // Broadcast channel for external consumers — capacity 256, allows multiple subscribers.
         let (broadcast_tx, _) = broadcast::channel(256);
 
+        // Create the shutdown signal BEFORE the bridge task so it can be cloned.
+        let shutdown = Arc::new(AtomicBool::new(false));
+
         // Bridge task: forwards events from mpsc (internal, from MeshBehaviour) to broadcast (external).
         let bridge_broadcast_tx = broadcast_tx.clone();
         let bridge_shutdown = shutdown.clone();
@@ -268,7 +271,7 @@ impl Libp2pBackend {
             security_manager: SecurityManager::generate(),
             task_handle: None,
             bridge_handle: Some(bridge_handle),
-            shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown,
         })
     }
 

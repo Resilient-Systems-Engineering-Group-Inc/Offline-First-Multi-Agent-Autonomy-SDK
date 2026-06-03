@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, RwLock};
 use tokio::time::{sleep, Duration};
 use futures::stream::{BoxStream, StreamExt};
 use async_trait::async_trait;
@@ -72,14 +72,13 @@ impl InMemoryRouter {
 pub struct InMemoryBackend {
     local_agent_id: AgentId,
     event_tx: broadcast::Sender<TransportEvent>,
-    event_rx: broadcast::Receiver<TransportEvent>,
     known_peers: Vec<PeerInfo>,
 }
 
 impl InMemoryBackend {
     /// Create a new in‑memory backend.
     pub async fn new(config: MeshTransportConfig) -> Result<Self> {
-        let (event_tx, event_rx) = broadcast::channel(256);
+        let (event_tx, _) = broadcast::channel(256);
         GLOBAL_ROUTER.subscribe(config.local_agent_id, event_tx.clone()).await;
 
         // Simulate known peers (for demo, we'll add them later via `add_peer`)
@@ -88,7 +87,6 @@ impl InMemoryBackend {
         Ok(Self {
             local_agent_id: config.local_agent_id,
             event_tx,
-            event_rx,
             known_peers,
         })
     }

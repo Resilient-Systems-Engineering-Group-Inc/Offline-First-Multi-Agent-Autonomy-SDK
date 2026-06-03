@@ -108,7 +108,6 @@ impl<T: StateSync + Send + Sync> AdvancedRecoveryEngine<T> {
         let hashmap: HashMap<String, serde_json::Value> = map.to_hashmap();
         let state_bytes = serde_json::to_vec(&hashmap)
             .map_err(|e| format!("Failed to serialize state: {}", e))?;
-        use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         state_bytes.hash(&mut hasher);
         let state_hash = hasher.finish().to_le_bytes().to_vec();

@@ -1,7 +1,8 @@
 //! State migration utilities for version upgrades.
 
 use crate::crdt_map::CrdtMap;
-use serde_json::{Value, Map};
+use common::types::AgentId;
+use serde_json::Value;
 use anyhow::{Result, bail};
 
 /// Version identifier for the state schema.
@@ -74,8 +75,6 @@ impl Migration for KeyRenameMigration {
         Ok(())
     }
 }
-
-use common::types::AgentId;
 
 /// A migration that transforms values using a custom function.
 pub struct ValueTransformMigration {
